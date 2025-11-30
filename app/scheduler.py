@@ -3,7 +3,8 @@ def choose_model(stats: dict, prompt: str, force_mode: str = None) -> tuple[str,
     """
     Adaptive rule-based scheduler that chooses between CPU and GPU models.
     
-    ✅ UPDATED: Improved logic for concurrency testing
+    ✅ UPDATED: Now uses gemma2:2b (lighter GPU model)
+    ✅ UPDATED: Stricter thresholds for better routing
     
     Args:
         stats: System statistics (CPU/GPU utilization, memory)
@@ -14,9 +15,14 @@ def choose_model(stats: dict, prompt: str, force_mode: str = None) -> tuple[str,
         tuple: (selected_model, decision_reason)
     """
     
-    # Force modes for testing
+    # ⚙️ FORCE MODES FOR TESTING
+    # Change these to test different scenarios:
+    # force_mode = "gpu"  # Uncomment for GPU-only test
+    # force_mode = "cpu"  # Uncomment for CPU-only test
+    # force_mode = None   # Use adaptive scheduling (default)
+    
     if force_mode == "gpu":
-        return "gemma3", "Force GPU mode"
+        return "gemma2:2b", "Force GPU mode"  # ✅ CHANGED: gemma3 → gemma2:2b
     if force_mode == "cpu":
         return "phi3", "Force CPU mode"
     
@@ -38,25 +44,35 @@ def choose_model(stats: dict, prompt: str, force_mode: str = None) -> tuple[str,
     
     # ✅ Rule 3: Very large prompt (>80 words) → Prefer GPU if available
     if prompt_len > 80 and gpu_util < 85:
-        return "gemma3", f"Large prompt (len={prompt_len}), using GPU"
+        return "gemma2:2b", f"Large prompt (len={prompt_len}), using GPU"  # ✅ CHANGED
     
-    # ✅ Rule 4: Tiny prompt (<15 words) → Always use CPU (faster for small tasks)
-    if prompt_len < 15:
+    # ✅ Rule 4: Tiny prompt (<8 words) → Always use CPU (faster for small tasks)
+    # CHANGED: Stricter threshold (was 15, now 8)
+    if prompt_len < 8:
         return "phi3", f"Tiny prompt (len={prompt_len}), CPU optimal"
     
     # ✅ Rule 5: CPU is overloaded (>80%) → Offload to GPU
     if cpu_util > 80 and gpu_util < 75:
-        return "gemma3", f"CPU overloaded ({cpu_util}%), offloading to GPU"
+        return "gemma2:2b", f"CPU overloaded ({cpu_util}%), offloading to GPU"  # ✅ CHANGED
     
-    # ✅ Rule 6: Medium prompts (15-50 words) → Balanced decision
-    if 15 <= prompt_len <= 50:
+    # ✅ Rule 6: Small-medium prompts (8-25 words) → Prefer GPU if available
+    # CHANGED: New rule for 8-25 word prompts
+    if 8 <= prompt_len <= 25:
         if gpu_util < 60:
-            return "gemma3", f"Medium prompt, GPU available (util={gpu_util}%)"
+            return "gemma2:2b", f"Small prompt, GPU available (util={gpu_util}%)"  # ✅ CHANGED
+        else:
+            return "phi3", f"Small prompt, GPU busy, using CPU"
+    
+    # ✅ Rule 7: Medium prompts (25-80 words) → Prefer GPU
+    # CHANGED: Renamed from Rule 6, adjusted range
+    if 25 < prompt_len <= 80:
+        if gpu_util < 70:
+            return "gemma2:2b", f"Medium prompt, GPU available (util={gpu_util}%)"  # ✅ CHANGED
         else:
             return "phi3", f"Medium prompt, GPU busy, using CPU"
     
     # ✅ Fallback: Choose less busy resource
     if gpu_util < cpu_util and gpu_util < 70:
-        return "gemma3", f"GPU less busy (GPU={gpu_util}% vs CPU={cpu_util}%)"
+        return "gemma2:2b", f"GPU less busy (GPU={gpu_util}% vs CPU={cpu_util}%)"  # ✅ CHANGED
     else:
         return "phi3", f"CPU selected (CPU={cpu_util}%, GPU={gpu_util}%)"

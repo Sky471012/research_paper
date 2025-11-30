@@ -3,7 +3,7 @@ import requests
 import time
 
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-DEFAULT_MODEL = "gemma3"
+DEFAULT_MODEL = "gemma2"
 
 def run_inference(prompt: str, model: str = DEFAULT_MODEL, max_retries: int = 1):
     """
@@ -16,7 +16,7 @@ def run_inference(prompt: str, model: str = DEFAULT_MODEL, max_retries: int = 1)
     
     Args:
         prompt: Input text
-        model: Model name (gemma3 or phi3)
+        model: Model name (gemma2 or phi3)
         max_retries: Number of retry attempts
     
     Returns:

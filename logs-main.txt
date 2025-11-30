@@ -1,0 +1,539 @@
+======================================================================
+🧪 ADAPTIVE SCHEDULER CONCURRENCY TEST SUITE
+======================================================================
+
+============================================================
+🚀 TEST: Test 1: 5 tiny prompts (CPU expected)
+   Burst size: 5 concurrent requests
+============================================================
+
+
+📊 RESULTS:
+   ✅ Successful: 5/5
+   ❌ Failed: 0
+   ⏱️  Total time: 18.78s
+
+   Model Distribution:
+   🔵 GPU (Gemma3): 0 requests (0.0%)
+   🟢 CPU (Phi3): 5 requests (100.0%)
+
+   Latency Stats (end-to-end):
+   • Min: 9.52s
+   • Max: 18.78s
+   • Mean: 13.82s
+   • Median: 13.14s
+   • P95: 18.78s
+
+   Server Processing Time:
+   • Mean: 13.81s
+   • P95: 18.77s
+
+   Throughput:
+   • Mean: 15.73 tokens/s
+
+   Sample Scheduling Decisions:
+   •   3 words → phi3       | Tiny prompt (len=3), CPU optimal | Queue depth: 1
+   •   2 words → phi3       | Tiny prompt (len=2), CPU optimal | Queue depth: 4
+   •   3 words → phi3       | Tiny prompt (len=3), CPU optimal | Queue depth: 2
+
+============================================================
+🚀 TEST: Test 2: 10 small prompts (15-25 words, mixed routing)
+   Burst size: 10 concurrent requests
+============================================================
+
+
+📊 RESULTS:
+   ✅ Successful: 10/10
+   ❌ Failed: 0
+   ⏱️  Total time: 86.41s
+
+   Model Distribution:
+   🔵 GPU (Gemma3): 10 requests (100.0%)
+   🟢 CPU (Phi3): 0 requests (0.0%)
+
+   Latency Stats (end-to-end):
+   • Min: 15.35s
+   • Max: 86.41s
+   • Mean: 51.35s
+   • Median: 50.84s
+   • P95: 86.41s
+
+   Server Processing Time:
+   • Mean: 51.34s
+   • P95: 86.39s
+
+   Throughput:
+   • Mean: 11.22 tokens/s
+
+   Sample Scheduling Decisions:
+   •  10 words → gemma2:2b  | Small prompt, GPU available (util=1.0%) | Queue de
+   •  12 words → gemma2:2b  | Small prompt, GPU available (util=1.0%) | Queue de
+   •   8 words → gemma2:2b  | Small prompt, GPU available (util=1.0%) | Queue de
+
+============================================================
+🚀 TEST: Test 3: 10 medium prompts (50-80 words, GPU preferred)
+   Burst size: 10 concurrent requests
+============================================================
+
+
+📊 RESULTS:
+   ✅ Successful: 10/10
+   ❌ Failed: 0
+   ⏱️  Total time: 104.98s
+
+   Model Distribution:
+   🔵 GPU (Gemma3): 10 requests (100.0%)
+   🟢 CPU (Phi3): 0 requests (0.0%)
+
+   Latency Stats (end-to-end):
+   • Min: 12.08s
+   • Max: 104.98s
+   • Mean: 58.77s
+   • Median: 59.10s
+   • P95: 104.98s
+
+   Server Processing Time:
+   • Mean: 58.75s
+   • P95: 104.96s
+
+   Throughput:
+   • Mean: 15.29 tokens/s
+
+   Sample Scheduling Decisions:
+   •  39 words → gemma2:2b  | Medium prompt, GPU available (util=1.0%) | Queue d
+   •  39 words → gemma2:2b  | Medium prompt, GPU available (util=1.0%) | Queue d
+   •  31 words → gemma2:2b  | Medium prompt, GPU available (util=1.0%) | Queue d
+
+============================================================
+🚀 TEST: Test 4: 15 mixed prompts (realistic workload)
+   Burst size: 15 concurrent requests
+============================================================
+
+
+📊 RESULTS:
+   ✅ Successful: 15/15
+   ❌ Failed: 0
+   ⏱️  Total time: 116.67s
+
+   Model Distribution:
+   🔵 GPU (Gemma3): 10 requests (66.7%)
+   🟢 CPU (Phi3): 5 requests (33.3%)
+
+   Latency Stats (end-to-end):
+   • Min: 5.63s
+   • Max: 116.67s
+   • Mean: 48.00s
+   • Median: 36.78s
+   • P95: 116.67s
+
+   Server Processing Time:
+   • Mean: 47.99s
+   • P95: 116.66s
+
+   Throughput:
+   • Mean: 10.00 tokens/s
+
+   Sample Scheduling Decisions:
+   •   3 words → phi3       | Tiny prompt (len=3), CPU optimal | Queue depth: 1
+   •   2 words → phi3       | Tiny prompt (len=2), CPU optimal | Queue depth: 3
+   •   3 words → phi3       | Tiny prompt (len=3), CPU optimal | Queue depth: 2
+
+============================================================
+🚀 TEST: Test 5: 20 requests (stress test)
+   Burst size: 20 concurrent requests
+============================================================
+
+
+📊 RESULTS:
+   ✅ Successful: 20/20
+   ❌ Failed: 0
+   ⏱️  Total time: 92.52s
+
+   Model Distribution:
+   🔵 GPU (Gemma3): 5 requests (25.0%)
+   🟢 CPU (Phi3): 15 requests (75.0%)
+
+   Latency Stats (end-to-end):
+   • Min: 5.58s
+   • Max: 92.51s
+   • Mean: 41.32s
+   • Median: 40.14s
+   • P95: 92.51s
+
+   Server Processing Time:
+   • Mean: 39.16s
+   • P95: 83.45s
+
+   Throughput:
+   • Mean: 7.02 tokens/s
+
+   Sample Scheduling Decisions:
+   •   3 words → phi3       | Tiny prompt (len=3), CPU optimal | Queue depth: 1
+   •   2 words → phi3       | Tiny prompt (len=2), CPU optimal | Queue depth: 5
+   •   3 words → phi3       | Tiny prompt (len=3), CPU optimal | Queue depth: 4
+
+======================================================================
+✅ ALL TESTS COMPLETED
+📊 Run 'python analyze_results.py' to see detailed analysis
+======================================================================
+
+timestamp,mode,selected_model,decision_reason,latency_s,prompt_length,output_tokens,throughput_tokens_per_s,cpu_util_before,cpu_util_after,cpu_util_delta,gpu_util_before,gpu_util_after,gpu_util_delta,cpu_mem_before_gb,cpu_mem_after_gb,gpu_mem_before_gb,gpu_mem_after_gb,gpu_mem_util_before_pct,gpu_mem_util_after_pct
+2025-11-30T16:34:24.550690,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 3",9.514,2,442,46.46,0.0,38.0,38.0,8.0,94.0,86.0,13.62,13.65,4.46,4.46,74.42,74.42
+2025-11-30T16:34:24.552243,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 4",11.283,2,96,8.51,0.0,46.7,46.7,8.0,94.0,86.0,13.62,13.59,4.46,4.46,74.42,74.42
+2025-11-30T16:34:24.547461,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 1",13.137,3,91,6.93,34.8,43.1,8.3,8.0,93.0,85.0,13.62,13.59,4.46,4.46,74.42,74.42
+2025-11-30T16:34:24.548620,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 2",16.332,3,168,10.29,0.0,43.4,43.4,8.0,93.0,85.0,13.62,13.58,4.46,4.46,74.42,74.42
+2025-11-30T16:34:24.552895,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 5",18.771,3,121,6.45,0.0,46.3,46.3,8.0,95.0,87.0,13.62,13.59,4.46,4.46,74.42,74.42
+2025-11-30T16:34:46.340934,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 1",15.342,10,412,26.86,41.4,55.6,14.2,1.0,85.0,84.0,13.65,14.02,4.46,3.03,74.42,50.45
+2025-11-30T16:34:46.354911,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 10",23.63,8,446,18.87,0.0,43.0,43.0,1.0,85.0,84.0,13.65,13.96,4.46,3.02,74.42,50.43
+2025-11-30T16:34:46.345748,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 5",33.636,10,585,17.39,0.0,33.1,33.1,1.0,85.0,84.0,13.65,13.97,4.46,3.02,74.42,50.43
+2025-11-30T16:34:46.342426,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 2",40.089,9,372,9.28,0.0,33.2,33.2,1.0,85.0,84.0,13.65,14.03,4.46,3.02,74.42,50.43
+2025-11-30T16:34:46.343657,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 4",47.417,12,410,8.65,0.0,29.8,29.8,1.0,86.0,85.0,13.65,14.0,4.46,3.02,74.42,50.43
+2025-11-30T16:34:46.346801,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 6",54.24,9,396,7.3,0.0,27.7,27.7,1.0,86.0,85.0,13.65,13.97,4.46,3.02,74.42,50.43
+2025-11-30T16:34:46.343200,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 3",63.01,8,486,7.71,70.0,38.8,-31.2,1.0,85.0,84.0,13.65,13.96,4.46,3.02,74.42,50.43
+2025-11-30T16:34:46.349395,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 7",71.54,11,446,6.23,0.0,33.7,33.7,1.0,84.0,83.0,13.65,13.92,4.46,3.02,74.42,50.43
+2025-11-30T16:34:46.353045,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 9",78.121,12,371,4.75,0.0,29.2,29.2,1.0,84.0,83.0,13.65,13.93,4.46,3.02,74.42,50.43
+2025-11-30T16:34:46.350923,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 8",86.389,11,442,5.12,0.0,30.4,30.4,1.0,83.0,82.0,13.65,13.94,4.46,3.01,74.42,50.18
+2025-11-30T16:36:15.768091,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 6",12.065,39,582,48.24,0.0,30.3,30.3,1.0,86.0,85.0,13.95,14.07,3.01,3.01,50.18,50.18
+2025-11-30T16:36:15.765407,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 3",22.87,32,609,26.63,0.0,26.0,26.0,1.0,86.0,85.0,13.95,14.03,3.01,3.0,50.18,50.09
+2025-11-30T16:36:15.768769,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 7",31.827,39,524,16.46,0.0,25.5,25.5,1.0,87.0,86.0,13.95,14.02,3.01,3.0,50.18,50.05
+2025-11-30T16:36:15.764767,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 2",42.098,32,583,13.85,80.0,22.5,-57.5,1.0,88.0,87.0,13.95,14.02,3.01,3.0,50.18,50.05
+2025-11-30T16:36:15.769331,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 8",54.389,31,697,12.82,0.0,22.8,22.8,1.0,87.0,86.0,13.95,14.02,3.01,3.0,50.18,50.04
+2025-11-30T16:36:15.767059,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 5",63.782,31,553,8.67,0.0,22.5,22.5,1.0,87.0,86.0,13.95,14.02,3.01,3.0,50.18,50.04
+2025-11-30T16:36:15.762995,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 1",74.326,39,619,8.33,23.6,22.0,-1.6,1.0,87.0,86.0,13.95,14.02,3.01,3.0,50.18,50.04
+2025-11-30T16:36:15.772127,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 10",86.2,31,651,7.55,0.0,21.9,21.9,1.0,88.0,87.0,13.95,14.01,3.01,3.0,50.18,50.04
+2025-11-30T16:36:15.766509,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 4",95.029,39,489,5.15,0.0,24.6,24.6,1.0,85.0,84.0,13.95,14.02,3.01,3.0,50.18,50.04
+2025-11-30T16:36:15.770285,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 9",104.963,31,550,5.24,0.0,25.3,25.3,1.0,86.0,85.0,13.95,14.01,3.01,3.0,50.18,50.04
+2025-11-30T16:38:03.754631,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 2",5.62,3,73,12.99,0.0,41.9,41.9,1.0,91.0,90.0,14.01,13.53,3.0,4.42,50.04,73.68
+2025-11-30T16:38:03.753948,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 1",7.691,3,101,13.13,20.8,27.5,6.7,1.0,95.0,94.0,14.01,13.53,3.0,4.42,50.04,73.68
+2025-11-30T16:38:03.772826,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 14",9.994,2,136,13.61,0.0,28.8,28.8,1.0,95.0,94.0,14.01,13.56,3.0,4.42,50.04,73.68
+2025-11-30T16:38:03.755184,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 3",10.861,2,50,4.6,0.0,31.0,31.0,1.0,93.0,92.0,14.01,13.56,3.0,4.42,50.04,73.68
+2025-11-30T16:38:03.766787,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 12",12.416,3,81,6.52,23.5,36.4,12.9,1.0,95.0,94.0,14.01,13.54,3.0,4.42,50.04,73.68
+2025-11-30T16:38:03.758806,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 6",22.872,39,436,19.06,0.0,27.1,27.1,1.0,86.0,85.0,14.01,13.71,3.0,2.98,50.04,49.71
+2025-11-30T16:38:03.756934,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 4",29.217,9,361,12.36,0.0,24.5,24.5,1.0,87.0,86.0,14.02,13.74,3.0,2.98,50.04,49.75
+2025-11-30T16:38:03.776957,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 15",36.751,8,416,11.32,0.0,26.5,26.5,1.0,86.0,85.0,14.01,13.72,3.0,2.98,50.04,49.75
+2025-11-30T16:38:03.761058,gpu,gemma2:2b,"Large prompt (len=118), using GPU | Queue depth: 9",51.586,118,795,15.41,0.0,28.2,28.2,1.0,83.0,82.0,14.01,13.38,3.0,2.98,50.04,49.75
+2025-11-30T16:38:03.770316,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 13",59.768,12,458,7.66,0.0,28.4,28.4,1.0,86.0,85.0,14.01,12.67,3.0,2.98,50.04,49.75
+2025-11-30T16:38:03.760226,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 8",70.626,39,617,8.74,0.0,27.0,27.0,1.0,85.0,84.0,14.01,12.67,3.0,2.98,50.04,49.75
+2025-11-30T16:38:03.761972,gpu,gemma2:2b,"Large prompt (len=107), using GPU | Queue depth: 10",87.469,107,867,9.91,0.0,37.3,37.3,1.0,85.0,84.0,14.01,12.77,3.0,2.98,50.04,49.75
+2025-11-30T16:38:03.757435,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 5",94.904,11,386,4.07,0.0,31.7,31.7,1.0,86.0,85.0,14.01,12.73,3.0,2.98,50.04,49.75
+2025-11-30T16:38:03.763312,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 11",103.386,10,467,4.52,0.0,31.8,31.8,1.0,83.0,82.0,14.01,12.78,3.0,2.98,50.04,49.75
+2025-11-30T16:38:03.759919,gpu,gemma2:2b,"Medium prompt, GPU available (util=1.0%) | Queue depth: 7",116.657,31,716,6.14,0.0,28.5,28.5,1.0,85.0,84.0,14.01,12.77,3.0,2.98,50.04,49.75
+2025-11-30T16:40:03.442332,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 5",5.567,2,81,14.55,0.0,42.9,42.9,2.0,93.0,91.0,12.78,12.23,2.98,4.42,49.75,73.68
+2025-11-30T16:40:03.440129,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 1",10.48,3,242,23.09,23.6,33.6,10.0,2.0,95.0,93.0,12.78,12.22,2.98,4.42,49.75,73.68
+2025-11-30T16:40:03.441078,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 2",12.498,3,101,8.08,0.0,43.8,43.8,2.0,93.0,91.0,12.78,12.19,2.98,4.42,49.75,73.68
+2025-11-30T16:40:03.441791,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 4",14.526,3,99,6.82,0.0,37.5,37.5,2.0,94.0,92.0,12.78,12.19,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.449955,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 13",17.185,2,137,7.97,0.0,33.1,33.1,2.0,93.0,91.0,12.78,12.21,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.441542,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 3",23.944,3,323,13.49,0.0,54.9,54.9,2.0,93.0,91.0,12.78,12.55,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.448656,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 11",29.815,3,289,9.69,0.0,45.4,45.4,2.0,89.0,87.0,12.78,12.39,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.442879,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 6",33.613,2,191,5.68,0.0,35.6,35.6,2.0,93.0,91.0,12.78,12.37,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.446980,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 8",35.974,3,119,3.31,0.0,37.1,37.1,2.0,93.0,91.0,12.78,12.34,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.447930,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 9",37.932,3,102,2.69,0.0,30.3,30.3,2.0,94.0,92.0,12.78,12.33,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.453993,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 16",42.299,3,216,5.11,100.0,34.3,-65.7,2.0,95.0,93.0,12.78,12.28,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.450376,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 14",43.466,2,67,1.54,0.0,42.7,42.7,2.0,93.0,91.0,12.78,12.29,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.457872,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 17",40.086,3,117,2.92,0.0,40.5,40.5,2.0,95.0,93.0,12.78,12.33,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.462500,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 19",34.034,2,51,1.5,0.0,41.2,41.2,2.0,94.0,92.0,12.78,12.27,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.463252,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 20",34.16,2,99,2.9,0.0,37.1,37.1,2.0,94.0,92.0,12.78,12.29,2.98,4.42,49.75,73.72
+2025-11-30T16:40:03.449291,gpu,gemma2:2b,"Small prompt, GPU available (util=2.0%) | Queue depth: 12",59.116,8,425,7.19,0.0,28.1,28.1,2.0,86.0,84.0,12.78,12.55,2.98,2.98,49.75,49.71
+2025-11-30T16:40:03.448328,gpu,gemma2:2b,"Small prompt, GPU available (util=2.0%) | Queue depth: 10",68.911,12,539,7.82,0.0,27.7,27.7,2.0,86.0,84.0,12.78,12.56,2.98,2.98,49.75,49.75
+2025-11-30T16:40:03.450721,gpu,gemma2:2b,"Small prompt, GPU available (util=2.0%) | Queue depth: 15",74.031,9,284,3.84,0.0,29.7,29.7,2.0,86.0,84.0,12.78,12.58,2.98,2.98,49.75,49.75
+2025-11-30T16:40:03.446074,gpu,gemma2:2b,"Small prompt, GPU available (util=2.0%) | Queue depth: 7",83.454,10,536,6.42,0.0,30.1,30.1,2.0,84.0,82.0,12.78,12.63,2.98,2.98,49.75,49.75
+2025-11-30T16:40:03.460841,gpu,gemma2:2b,"Small prompt, GPU available (util=2.0%) | Queue depth: 18",82.028,11,470,5.73,0.0,35.2,35.2,2.0,86.0,84.0,12.78,12.69,2.98,2.98,49.75,49.75
+
+======================================================================
+📊 CONCURRENCY TEST ANALYSIS
+======================================================================
+
+📈 Overall Statistics:
+   Total requests: 60
+   GPU requests: 35
+   CPU requests: 25
+
+⏱️  Latency Analysis:
+   Min: 5.57s
+   Max: 116.66s
+   Mean: 44.55s
+   Median: 37.34s
+   P95: 95.45s
+   P99: 109.76s
+
+🆚 GPU vs CPU Comparison:
+
+   GPU (Gemma3):
+   • Requests: 35
+   • Mean latency: 61.19s
+   • Mean throughput: 11.29 tokens/s
+
+   CPU (Phi3):
+   • Requests: 25
+   • Mean latency: 21.25s
+   • Mean throughput: 9.55 tokens/s
+
+📏 Performance by Prompt Length:
+
+   Tiny (<10) words:
+   • Count: 37
+   • GPU: 12, CPU: 25
+   • Mean latency: 31.00s
+
+   Small (10-30) words:
+   • Count: 8
+   • GPU: 8, CPU: 0
+   • Mean latency: 73.63s
+
+   Medium (30-60) words:
+   • Count: 13
+   • GPU: 13, CPU: 0
+   • Mean latency: 61.36s
+
+   Large (>60) words:
+   • Count: 2
+   • GPU: 2, CPU: 0
+   • Mean latency: 69.53s
+
+💻 Resource Utilization:
+   CPU util - Before: 7.0%
+   CPU util - After: 33.5%
+   GPU util - Before: 1.9%
+   GPU util - After: 88.9%
+
+🧠 Scheduling Decisions:
+   • Tiny prompt (len=3), CPU optimal | Queue depth: 1: 3
+   • Tiny prompt (len=3), CPU optimal | Queue depth: 2: 3
+   • Tiny prompt (len=2), CPU optimal | Queue depth: 3: 2
+   • Small prompt, GPU available (util=1.0%) | Queue depth: 5: 2
+   • Small prompt, GPU available (util=1.0%) | Queue depth: 4: 2
+
+======================================================================
+
+
+
+🚀 Starting SEQUENTIAL baseline test...
+
+This test sends requests one-by-one to measure baseline performance.
+
+[1/10] Sending request... ✅ phi3    |  3.89s |  10.3 tok/s |   3 words
+[2/10] Sending request... ✅ phi3    |  2.00s |  48.5 tok/s |   2 words
+[3/10] Sending request... ✅ phi3    |  2.72s |  47.1 tok/s |   2 words
+[4/10] Sending request... ✅ phi3    |  2.78s |  52.9 tok/s |   4 words
+[5/10] Sending request... ✅ phi3    |  2.34s |  55.6 tok/s |   4 words
+[6/10] Sending request... ✅ phi3    |  8.45s |  50.4 tok/s |   4 words
+[7/10] Sending request... ✅ phi3    |  6.56s |  50.5 tok/s |   7 words
+[8/10] Sending request... ✅ gemma2:2b | 13.05s |  38.9 tok/s |   9 words
+[9/10] Sending request... ✅ gemma2:2b |  7.26s |  53.8 tok/s |  10 words
+[10/10] Sending request... ✅ gemma2:2b | 11.92s |  54.7 tok/s |  25 words
+
+✅ Sequential test completed. Check logs.csv
+
+Sequential Logs:-
+
+2025-11-30T16:43:02.069013,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 1",3.887,3,40,10.29,25.7,30.7,5.0,8.0,93.0,85.0,12.76,12.26,2.98,4.42,49.75,73.68
+2025-11-30T16:43:06.974706,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 1",2.002,2,97,48.46,22.1,38.8,16.7,1.0,94.0,93.0,12.27,12.26,4.42,4.42,73.68,73.68
+2025-11-30T16:43:10.002200,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 1",2.719,2,128,47.07,38.3,37.1,-1.2,1.0,94.0,93.0,12.27,12.29,4.42,4.42,73.68,73.68
+2025-11-30T16:43:13.749177,cpu,phi3,"GPU busy (80.0%), routing small prompt to CPU | Queue depth: 1",2.778,4,147,52.91,28.0,27.7,-0.3,80.0,95.0,15.0,12.3,12.29,4.42,4.42,73.68,73.72
+2025-11-30T16:43:17.540164,cpu,phi3,"Tiny prompt (len=4), CPU optimal | Queue depth: 1",2.34,4,130,55.56,22.7,30.6,7.9,1.0,94.0,93.0,12.31,12.3,4.42,4.42,73.72,73.72
+2025-11-30T16:43:20.896625,cpu,phi3,"GPU busy (95.0%), routing small prompt to CPU | Queue depth: 1",8.452,4,426,50.4,27.5,26.1,-1.4,95.0,94.0,-1.0,12.3,12.29,4.42,4.42,73.72,73.72
+2025-11-30T16:43:30.371035,cpu,phi3,"Tiny prompt (len=7), CPU optimal | Queue depth: 1",6.557,7,331,50.48,24.2,26.3,2.1,1.0,95.0,94.0,12.31,12.28,4.42,4.42,73.72,73.72
+2025-11-30T16:43:37.948364,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 1",13.052,9,508,38.92,26.8,27.1,0.3,1.0,85.0,84.0,12.25,12.51,4.42,2.98,73.72,49.71
+2025-11-30T16:43:52.006667,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 1",7.265,10,391,53.82,30.0,27.0,-3.0,1.0,85.0,84.0,12.53,12.55,2.98,2.98,49.71,49.75
+2025-11-30T16:44:00.301826,gpu,gemma2:2b,"Small prompt, GPU available (util=1.0%) | Queue depth: 1",11.921,25,652,54.69,34.5,31.3,-3.2,1.0,76.0,75.0,12.54,12.59,2.98,2.98,49.75,49.75
+
+
+======================================================================
+🔬 TEST B: CRITICAL COMPARISON
+GPU-only vs Hybrid Scheduling
+======================================================================
+
+📋 INSTRUCTIONS:
+
+This test runs in 2 parts:
+
+  PART 1: GPU-ONLY MODE
+    1. Edit scheduler.py
+    2. Set: force_mode = 'gpu' (line ~15)
+    3. Save and restart FastAPI server
+    4. Come back here and press ENTER
+
+  PART 2: HYBRID MODE
+    1. Edit scheduler.py
+    2. Set: force_mode = None (line ~15)
+    3. Save and restart FastAPI server
+    4. Come back here and press ENTER
+
+======================================================================
+
+⚠  Ready for PART 1 (GPU-only)? Edit scheduler.py now, then press ENTER...
+
+🔵 Running GPU-ONLY test...
+
+======================================================================
+🧪 SCENARIO: GPU-ONLY
+======================================================================
+
+📊 RESULTS:
+   Success Rate: 15/15 (100.0%)
+   Failed: 0
+   Total Time: 122.28s
+
+   Model Distribution:
+   • GPU (gemma2:2b): 15 requests (100.0%)
+   • CPU (phi3): 0 requests (0.0%)
+
+   Latency:
+   • Min:     16.23s
+   • Mean:    69.66s
+   • Median:  71.15s
+   • P95:    122.28s
+   • Max:    122.28s
+
+   Throughput:
+   • Mean: 8.97 tokens/s
+
+
+   Latency:
+   • Min:     16.23s
+   • Mean:    69.66s
+   • Median:  71.15s
+   • P95:    122.28s
+   • Max:    122.28s
+
+   Throughput:
+   • Mean: 8.97 tokens/s
+
+   • Min:     16.23s
+   • Mean:    69.66s
+   • Median:  71.15s
+   • P95:    122.28s
+   • Max:    122.28s
+
+   Throughput:
+   • Mean: 8.97 tokens/s
+
+   • P95:    122.28s
+   • Max:    122.28s
+
+   Throughput:
+   • Mean: 8.97 tokens/s
+
+
+   Throughput:
+   • Mean: 8.97 tokens/s
+
+   Throughput:
+   • Mean: 8.97 tokens/s
+
+   • Mean: 8.97 tokens/s
+
+   Sample Routing Decisions:
+
+   Sample Routing Decisions:
+   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 1
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 6
+   Sample Routing Decisions:
+   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 1
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 6
+   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 1
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 6
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 4
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 6
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 4
+   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 2
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 4
+   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 2
+   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 2
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 7
+
+
+
+
+======================================================================
+======================================================================
+⏸  PAUSE - Change scheduler.py for PART 2
+⏸  PAUSE - Change scheduler.py for PART 2
+======================================================================
+
+📝 Action needed:
+   1. Edit scheduler.py
+   2. Change: force_mode = 'gpu'  →  force_mode = None
+   3. Save file
+   4. Restart FastAPI server: uvicorn app.server:app --reload
+
+⚠  Ready for PART 2 (Hybrid)? Press ENTER when server restarted...
+
+
+
+
+
+📝 Action needed:
+   1. Edit scheduler.py
+   2. Change: force_mode = 'gpu'  →  force_mode = None
+   3. Save file
+   4. Restart FastAPI server: uvicorn app.server:app --reload
+
+⚠  Ready for PART 2 (Hybrid)? Press ENTER when server restarted...
+
+🟢 Running HYBRID test...
+
+======================================================================
+🧪 SCENARIO: HYBRID
+======================================================================
+
+📊 RESULTS:
+   Success Rate: 15/15 (100.0%)
+   Failed: 0
+   Total Time: 109.07s
+
+   Model Distribution:
+   • GPU (gemma2:2b): 10 requests (66.7%)
+   • CPU (phi3): 5 requests (33.3%)
+
+   Latency:
+   • Min:      7.41s
+   • Mean:    48.08s
+   • Median:  41.95s
+   • P95:    109.06s
+   • Max:    109.06s
+
+   Throughput:
+   • Mean: 9.76 tokens/s
+
+   Sample Routing Decisions:
+   •   3w → phi3       | Tiny prompt (len=3), CPU optimal | Queue dept
+   •   2w → phi3       | Tiny prompt (len=2), CPU optimal | Queue dept
+   •   2w → phi3       | Tiny prompt (len=2), CPU optimal | Queue dept
+   •   3w → phi3       | Tiny prompt (len=3), CPU optimal | Queue dept
+   •   2w → phi3       | Tiny prompt (len=2), CPU optimal | Queue dept
+
+
+======================================================================
+📊 FINAL COMPARISON - YOUR RESEARCH RESULTS
+======================================================================
+
+Metric                    GPU-Only           Hybrid             Winner
+---------------------------------------------------------------------------
+Success Rate               100.0%            100.0%           ⚖  Tie
+Failed Requests                0                  0             ⚖  Tie
+Mean Latency               69.66s            48.08s           🟢 Hybrid
+P95 Latency               122.28s           109.06s           🟢 Hybrid
+Throughput                  8.97 tok/s        9.76 tok/s      🟢 Hybrid
+Total Time                122.28s           109.07s           🟢 Hybrid
+
+---------------------------------------------------------------------------
+
+🔹 Model Distribution:
+   GPU-only:  15/15 GPU, 0/15 CPU
+   Hybrid:    10/15 GPU, 5/15 CPU
+
+🎯 HYBRID IMPROVEMENTS:
+   ✅ Mean latency: 31.0% faster
+   ✅ P95 latency: 10.8% faster
+
+🎓 FOR YOUR RESEARCH PAPER:
+   "Our adaptive hybrid scheduler achieved 100% success rate
+   with P95 latency of 109.1s, compared to GPU-only
+   (100% success, P95: 122.3s). The scheduler
+   distributed workload across 5 CPU and 10 GPU requests,
+   preventing saturation and reducing tail latency by 10.8%."
+
+======================================================================
+
+✅ TEST B COMPLETE - Data ready for research paper!
