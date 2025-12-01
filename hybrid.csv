@@ -1,0 +1,16 @@
+timestamp,mode,selected_model,decision_reason,latency_s,prompt_length,output_tokens,throughput_tokens_per_s,cpu_util_before,cpu_util_after,cpu_util_delta,gpu_util_before,gpu_util_after,gpu_util_delta,cpu_mem_before_gb,cpu_mem_after_gb,gpu_mem_before_gb,gpu_mem_after_gb,gpu_mem_util_before_pct,gpu_mem_util_after_pct
+2025-12-01T16:26:57.705280,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 5",13.203,3,446,33.78,0.0,34.7,34.7,8.0,95.0,87.0,11.85,11.33,2.9,4.33,48.3,72.24
+2025-12-01T16:26:59.271521,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 7",14.758,2,83,5.62,70.0,38.7,-31.3,8.0,87.0,79.0,11.86,11.33,2.9,4.33,48.3,72.24
+2025-12-01T16:27:01.703152,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 4",17.206,2,124,7.21,0.0,39.4,39.4,8.0,91.0,83.0,11.85,11.36,2.9,4.33,48.3,72.24
+2025-12-01T16:27:03.567154,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 2",19.077,2,107,5.61,46.2,33.2,-13.0,8.0,91.0,83.0,11.84,11.36,2.9,4.33,48.3,72.24
+2025-12-01T16:27:07.633408,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 1",23.147,3,196,8.47,20.5,28.8,8.3,8.0,94.0,86.0,11.83,11.34,2.9,4.33,48.3,72.24
+2025-12-01T16:27:18.850112,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 13",34.319,23,483,14.07,0.0,27.6,27.6,8.0,84.0,76.0,11.89,11.62,2.9,2.9,48.3,48.3
+2025-12-01T16:27:26.569862,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 6",42.065,23,444,10.56,0.0,26.5,26.5,8.0,87.0,79.0,11.85,11.6,2.9,2.9,48.3,48.3
+2025-12-01T16:27:37.538727,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 8",53.024,21,619,11.67,0.0,31.3,31.3,8.0,84.0,76.0,11.86,11.61,2.9,2.9,48.3,48.3
+2025-12-01T16:27:47.183680,gpu,gemma2:2b,"CPU overloaded (90.0%), offloading to GPU | Queue depth: 3",62.687,21,518,8.26,90.0,33.9,-56.1,8.0,85.0,77.0,11.85,11.61,2.9,2.9,48.3,48.3
+2025-12-01T16:27:57.371828,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 10",72.849,10,598,8.21,0.0,34.9,34.9,8.0,85.0,77.0,11.87,11.62,2.9,2.9,48.3,48.3
+2025-12-01T16:28:03.934245,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 12",79.406,9,368,4.63,0.0,35.4,35.4,8.0,86.0,78.0,11.87,11.6,2.9,2.9,48.3,48.3
+2025-12-01T16:28:15.933752,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 9",91.413,22,650,7.11,0.0,34.1,34.1,8.0,86.0,78.0,11.87,11.6,2.9,2.9,48.3,48.3
+2025-12-01T16:28:23.957229,gpu,gemma2:2b,"CPU overloaded (83.3%), offloading to GPU | Queue depth: 11",99.433,9,439,4.42,83.3,34.6,-48.7,8.0,85.0,77.0,11.87,11.6,2.9,2.9,48.3,48.3
+2025-12-01T16:28:30.478723,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 14",105.944,8,350,3.3,0.0,31.7,31.7,8.0,86.0,78.0,11.89,11.6,2.9,2.9,48.3,48.3
+2025-12-01T16:28:37.531864,gpu,gemma2:2b,"CPU overloaded (100.0%), offloading to GPU | Queue depth: 15",112.994,11,381,3.37,100.0,25.7,-74.3,8.0,86.0,78.0,11.89,11.59,2.9,2.9,48.3,48.3

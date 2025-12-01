@@ -2,237 +2,225 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-sns.set_theme(style="whitegrid")
+# ================================
+# Configuration
+# ================================
+SEQUENTIAL_LOG = "sequential.csv"     # replace with actual file
+CONCURRENT_LOG = "concurrent.csv"     # replace with actual file
+GPU_ONLY_LOG = "gpu_only.csv"         # raw GPU-only logs
+HYBRID_LOG = "hybrid.csv"             # raw hybrid logs
 
-# ============================================================
-# 🔧 CHANGE THIS FILE FOR EACH RUN
-# ============================================================
-CSV_FILE = "logs_sequential.csv"   # change to:
-# logs_concurrent.csv
-# logs_gpu_only.csv
-# logs_hybrid.csv
+# Output directory
+OUTPUT_DIR = "./plots/"
+import os
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-df = pd.read_csv(CSV_FILE)
+# ================================
+# Load Logs
+# ================================
+def load_logs(path, workload_type):
+    df = pd.read_csv(path)
+    df["workload_type"] = workload_type
+    return df
 
-# ============================================================
-# ✅ DEVICE CLASSIFICATION FROM decision_reason
-# ============================================================
-def classify_device(reason):
-    r = str(reason).lower()
-    if "gpu" in r:
-        return "GPU"
-    elif "cpu" in r:
-        return "CPU"
-    else:
-        return "UNKNOWN"
+df_seq = load_logs(SEQUENTIAL_LOG, "sequential")
+df_con = load_logs(CONCURRENT_LOG, "concurrent")
 
-df["routed_device"] = df["decision_reason"].apply(classify_device)
+# Load these later once logs are available
+try:
+    df_gpu_only = load_logs(GPU_ONLY_LOG, "gpu_only")
+except:
+    df_gpu_only = pd.DataFrame(columns=df_seq.columns.tolist() + ["workload_type"])
 
-# # ============================================================
-# # 🔵 PART A — SEQUENTIAL LOGS (BASELINE)
-# # Enable ONLY when CSV = logs_sequential.csv
-# # ============================================================
+try:
+    df_hybrid = load_logs(HYBRID_LOG, "hybrid")
+except:
+    df_hybrid = pd.DataFrame(columns=df_seq.columns.tolist() + ["workload_type"])
 
-# # ---- Latency vs Prompt Length
-# plt.figure()
-# sns.scatterplot(data=df, x="prompt_length", y="latency_s")
-# plt.title("Sequential: Latency vs Prompt Length")
-# plt.savefig("A_latency_vs_prompt.png")
-# plt.close()
+# Merge all available logs
+df = pd.concat([df_seq, df_con, df_gpu_only, df_hybrid], ignore_index=True)
 
-# # ---- Throughput vs Prompt Length
-# plt.figure()
-# sns.scatterplot(data=df, x="prompt_length", y="throughput_tokens_per_s")
-# plt.title("Sequential: Throughput vs Prompt Length")
-# plt.savefig("A_throughput_vs_prompt.png")
-# plt.close()
+# ================================
+# Convert timestamp to datetime
+# ================================
+if "timestamp" in df.columns:
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="ignore")
 
-# # ---- CPU Util Before vs After
-# plt.figure()
-# sns.scatterplot(data=df, x="cpu_util_before", y="cpu_util_after")
-# plt.title("Sequential: CPU Util Before vs After")
-# plt.savefig("A_cpu_util_before_after.png")
-# plt.close()
+# ================================
+# Basic Cleaning
+# ================================
+df["mode"] = df["mode"].astype(str)
+df["selected_model"] = df["selected_model"].astype(str)
 
-# # ---- GPU Util Before vs After
-# plt.figure()
-# sns.scatterplot(data=df, x="gpu_util_before", y="gpu_util_after")
-# plt.title("Sequential: GPU Util Before vs After")
-# plt.savefig("A_gpu_util_before_after.png")
-# plt.close()
-
-# # ============================================================
-# # 🔴 PART B — CONCURRENT LOGS (CONTENDED SYSTEM)
-# # Enable ONLY when CSV = logs_concurrent.csv
-# # ============================================================
-
-# # ---- Latency Distribution
-# plt.figure()
-# sns.histplot(df["latency_s"], kde=True)
-# plt.title("Concurrent: Latency Distribution")
-# plt.savefig("B_latency_distribution.png")
-# plt.close()
-
-# # ---- Throughput Distribution
-# plt.figure()
-# sns.histplot(df["throughput_tokens_per_s"], kde=True)
-# plt.title("Concurrent: Throughput Distribution")
-# plt.savefig("B_throughput_distribution.png")
-# plt.close()
-
-# # ---- Routing Distribution CPU vs GPU
-# plt.figure()
-# sns.countplot(data=df, x="routed_device")
-# plt.title("Concurrent: Routing Distribution (CPU vs GPU)")
-# plt.savefig("B_routing_distribution.png")
-# plt.close()
-
-# # ---- CPU Util Per Request
-# plt.figure()
-# sns.histplot(df["cpu_util_after"], kde=True)
-# plt.title("Concurrent: CPU Utilization After Each Request")
-# plt.savefig("B_cpu_util_per_request.png")
-# plt.close()
-
-# # ---- GPU Util Per Request
-# plt.figure()
-# sns.histplot(df["gpu_util_after"], kde=True)
-# plt.title("Concurrent: GPU Utilization After Each Request")
-# plt.savefig("B_gpu_util_per_request.png")
-# plt.close()
-
-# =======================
-# PART C — PHASE 1 (SUMMARY ONLY)
-# Run this ONCE per dataset
-# =======================
-
-mean_latency = df["latency_s"].mean()
-p95_latency = df["latency_s"].quantile(0.95)
-mean_throughput = df["throughput_tokens_per_s"].mean()
-
-summary_df = pd.DataFrame([{
-    "mean_latency_s": mean_latency,
-    "p95_latency_s": p95_latency,
-    "mean_throughput_tok_s": mean_throughput
-}])
-
-summary_df.to_csv("C_summary_metrics.csv", index=False)
-
-print("✅ C_summary_metrics.csv generated for this mode ONLY")
+# ================================
+# Utility function
+# ================================
+def savefig(name):
+    plt.savefig(f"{OUTPUT_DIR}/{name}.png", dpi=300, bbox_inches="tight")
+    plt.clf()
 
 
-# # ============================================================
-# # 🟢 PART C — TRUE GPU-ONLY vs HYBRID COMPARISON (PAPER FIGURES)
-# # ============================================================
-
-# gpu_df = pd.read_csv("C_summary_gpu_only.csv").assign(mode="GPU-Only")
-# hybrid_df = pd.read_csv("C_summary_hybrid.csv").assign(mode="Hybrid")
-
-# comp_df = pd.concat([gpu_df, hybrid_df])
-
-# # ---- Mean Latency Comparison
-# plt.figure()
-# sns.barplot(data=comp_df, x="mode", y="mean_latency_s")
-# plt.title("Mean Latency: GPU-Only vs Hybrid")
-# plt.savefig("C_mean_latency_gpu_vs_hybrid.png")
-# plt.close()
-
-# # ---- P95 Latency Comparison
-# plt.figure()
-# sns.barplot(data=comp_df, x="mode", y="p95_latency_s")
-# plt.title("P95 Latency: GPU-Only vs Hybrid")
-# plt.savefig("C_p95_latency_gpu_vs_hybrid.png")
-# plt.close()
-
-# # ---- Mean Throughput Comparison
-# plt.figure()
-# sns.barplot(data=comp_df, x="mode", y="mean_throughput_tok_s")
-# plt.title("Mean Throughput: GPU-Only vs Hybrid")
-# plt.savefig("C_mean_throughput_gpu_vs_hybrid.png")
-# plt.close()
-
-# print("✅ GPU-Only vs Hybrid comparison plots generated")
+# =============================================================
+# 1. Latency vs Prompt Length (CPU vs GPU)
+# =============================================================
+sns.scatterplot(
+    data=df,
+    x="prompt_length",
+    y="latency_s",
+    hue="mode",
+    style="workload_type",
+    alpha=0.75
+)
+plt.title("Latency vs Prompt Length")
+plt.xlabel("Prompt Length (tokens)")
+plt.ylabel("Latency (s)")
+savefig("latency_vs_prompt_length")
 
 
-# # ---- Routing Distribution (Hybrid Only)
-
-# def classify_device(reason):
-#     reason = str(reason).lower()
-#     if "gpu" in reason:
-#         return "GPU"
-#     elif "cpu" in reason:
-#         return "CPU"
-#     else:
-#         return "UNKNOWN"
-
-# df["routed_device"] = df["decision_reason"].apply(classify_device)
-
-# plt.figure()
-# sns.countplot(data=df, x="routed_device")
-# plt.title("Routing Distribution (Hybrid Mode)")
-# plt.savefig("C_routing_distribution_hybrid.png")
-# plt.close()
-
-# gpu_raw = pd.read_csv("logs_gpu_only.csv").assign(mode="GPU-Only")
-# hybrid_raw = pd.read_csv("logs_hybrid.csv").assign(mode="Hybrid")
-
-# lat_df = pd.concat([gpu_raw, hybrid_raw])
-
-# plt.figure()
-# sns.histplot(data=lat_df, x="latency_s", hue="mode", kde=True)
-# plt.title("Latency Distribution: GPU-Only vs Hybrid")
-# plt.savefig("C_latency_distribution_gpu_vs_hybrid.png")
-# plt.close()
+# =============================================================
+# 2. Throughput vs Prompt Length
+# =============================================================
+sns.scatterplot(
+    data=df,
+    x="prompt_length",
+    y="throughput_tokens_per_s",
+    hue="mode",
+    style="workload_type"
+)
+plt.title("Throughput vs Prompt Length")
+plt.xlabel("Prompt Length (tokens)")
+plt.ylabel("Throughput (tokens/s)")
+savefig("throughput_vs_prompt_length")
 
 
-# # ============================================================
-# # 🟣 PART D — FINAL COMBINED SUMMARY (PAPER FIGURES)
-# # ============================================================
+# =============================================================
+# 3. Sequential vs Concurrent Latency Distribution
+# =============================================================
+sns.boxplot(
+    data=df[df["workload_type"].isin(["sequential", "concurrent"])],
+    x="workload_type",
+    y="latency_s"
+)
+plt.title("Latency Distribution: Sequential vs Concurrent")
+plt.xlabel("Workload Type")
+plt.ylabel("Latency (s)")
+savefig("latency_seq_vs_concurrent")
 
-# import os
 
-# required_files = [
-#     "C_summary_sequential.csv",
-#     "C_summary_concurrent.csv",
-#     "C_summary_hybrid.csv"
-# ]
+# =============================================================
+# 4. Sequential vs Concurrent Throughput
+# =============================================================
+sns.boxplot(
+    data=df[df["workload_type"].isin(["sequential", "concurrent"])],
+    x="workload_type",
+    y="throughput_tokens_per_s"
+)
+plt.title("Throughput Distribution: Sequential vs Concurrent")
+plt.xlabel("Workload Type")
+plt.ylabel("Throughput (tokens/s)")
+savefig("throughput_seq_vs_concurrent")
 
-# missing = [f for f in required_files if not os.path.exists(f)]
-# if missing:
-#     print("❌ Cannot run Part-D. Missing files:")
-#     for f in missing:
-#         print("   -", f)
-#     exit()
 
-# # ---- Load all summaries
-# seq_df = pd.read_csv("C_summary_sequential.csv").assign(mode="Sequential")
-# con_df = pd.read_csv("C_summary_concurrent.csv").assign(mode="Concurrent")
-# hyb_df = pd.read_csv("C_summary_hybrid.csv").assign(mode="Hybrid")
+# =============================================================
+# 5. CPU Utilization Before/After vs Prompt Length
+# =============================================================
+df_melt_cpu = df.melt(
+    id_vars=["prompt_length", "mode", "workload_type"],
+    value_vars=["cpu_util_before", "cpu_util_after"],
+    var_name="metric",
+    value_name="cpu_util"
+)
+sns.lineplot(
+    data=df_melt_cpu,
+    x="prompt_length",
+    y="cpu_util",
+    hue="metric",
+    style="workload_type"
+)
+plt.title("CPU Utilization Before/After vs Prompt Length")
+plt.xlabel("Prompt Length")
+plt.ylabel("CPU Util (%)")
+savefig("cpu_util_vs_prompt")
 
-# summary_df = pd.concat([seq_df, con_df, hyb_df])
 
-# # ============================================================
-# # ✅ FIGURE 2 — Overall Mean Latency Comparison
-# # ============================================================
+# =============================================================
+# 6. GPU Utilization Before/After vs Prompt Length
+# =============================================================
+df_melt_gpu = df.melt(
+    id_vars=["prompt_length", "mode", "workload_type"],
+    value_vars=["gpu_util_before", "gpu_util_after"],
+    var_name="metric",
+    value_name="gpu_util"
+)
+sns.lineplot(
+    data=df_melt_gpu,
+    x="prompt_length",
+    y="gpu_util",
+    hue="metric",
+    style="workload_type"
+)
+plt.title("GPU Utilization Before/After vs Prompt Length")
+plt.xlabel("Prompt Length")
+plt.ylabel("GPU Util (%)")
+savefig("gpu_util_vs_prompt")
 
-# plt.figure()
-# sns.barplot(data=summary_df, x="mode", y="mean_latency_s")
-# plt.title("Overall Mean Latency Comparison")
-# plt.xlabel("Execution Mode")
-# plt.ylabel("Mean Latency (s)")
-# plt.savefig("D_overall_mean_latency_comparison.png")
-# plt.close()
 
-# # ============================================================
-# # ✅ FIGURE 3 — Overall Mean Throughput Comparison
-# # ============================================================
+# =============================================================
+# 7. Tokens/sec Degradation Under Load
+# =============================================================
+sns.scatterplot(
+    data=df,
+    x="latency_s",
+    y="throughput_tokens_per_s",
+    hue="workload_type",
+    style="mode"
+)
+plt.title("Token Throughput vs Latency (Degradation Under Load)")
+plt.xlabel("Latency (s)")
+plt.ylabel("Throughput (tokens/s)")
+savefig("throughput_vs_latency")
 
-# plt.figure()
-# sns.barplot(data=summary_df, x="mode", y="mean_throughput_tok_s")
-# plt.title("Overall Mean Throughput Comparison")
-# plt.xlabel("Execution Mode")
-# plt.ylabel("Mean Throughput (tokens/sec)")
-# plt.savefig("D_overall_mean_throughput_comparison.png")
-# plt.close()
 
-# print("✅ Part-D Final Summary Figures Generated Successfully")
+# =============================================================
+# 8. Routing Distribution (CPU vs GPU)
+# =============================================================
+sns.countplot(data=df, x="mode")
+plt.title("Routing Distribution: CPU vs GPU")
+plt.xlabel("Device")
+plt.ylabel("Request Count")
+savefig("routing_distribution")
+
+
+# =============================================================
+# 9. Latency vs Output Tokens
+# =============================================================
+sns.scatterplot(
+    data=df,
+    x="output_tokens",
+    y="latency_s",
+    hue="mode",
+    style="workload_type"
+)
+plt.title("Latency vs Output Tokens")
+plt.xlabel("Output Tokens")
+plt.ylabel("Latency (s)")
+savefig("latency_vs_output_tokens")
+
+
+# =============================================================
+# 10. Throughput vs Output Tokens
+# =============================================================
+sns.scatterplot(
+    data=df,
+    x="output_tokens",
+    y="throughput_tokens_per_s",
+    hue="mode",
+    style="workload_type"
+)
+plt.title("Throughput vs Output Tokens")
+plt.xlabel("Output Tokens")
+plt.ylabel("Throughput (tokens/s)")
+savefig("throughput_vs_output_tokens")
+
+
+print("All plots generated in:", OUTPUT_DIR)

@@ -339,7 +339,7 @@ Sequential Logs:-
 
 
 ======================================================================
-🔬 TEST B: CRITICAL COMPARISON
+🔬 TEST B: CRITICAL COMPARISON (WITH CSV LOGGING)
 GPU-only vs Hybrid Scheduling
 ======================================================================
 
@@ -369,99 +369,40 @@ This test runs in 2 parts:
 🧪 SCENARIO: GPU-ONLY
 ======================================================================
 
+D:\aakash\research-paper\research_paper\phase5_experiment_runner.py:103: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
 📊 RESULTS:
    Success Rate: 15/15 (100.0%)
    Failed: 0
-   Total Time: 122.28s
+   Total Time: 134.23s
 
    Model Distribution:
    • GPU (gemma2:2b): 15 requests (100.0%)
    • CPU (phi3): 0 requests (0.0%)
 
    Latency:
-   • Min:     16.23s
-   • Mean:    69.66s
-   • Median:  71.15s
-   • P95:    122.28s
-   • Max:    122.28s
+   • Min:     16.35s
+   • Mean:    71.61s
+   • Median:  67.42s
+   • P95:    134.23s
+   • Max:    134.23s
 
    Throughput:
-   • Mean: 8.97 tokens/s
-
-
-   Latency:
-   • Min:     16.23s
-   • Mean:    69.66s
-   • Median:  71.15s
-   • P95:    122.28s
-   • Max:    122.28s
-
-   Throughput:
-   • Mean: 8.97 tokens/s
-
-   • Min:     16.23s
-   • Mean:    69.66s
-   • Median:  71.15s
-   • P95:    122.28s
-   • Max:    122.28s
-
-   Throughput:
-   • Mean: 8.97 tokens/s
-
-   • P95:    122.28s
-   • Max:    122.28s
-
-   Throughput:
-   • Mean: 8.97 tokens/s
-
-
-   Throughput:
-   • Mean: 8.97 tokens/s
-
-   Throughput:
-   • Mean: 8.97 tokens/s
-
-   • Mean: 8.97 tokens/s
-
-   Sample Routing Decisions:
+   • Mean: 8.83 tokens/s
 
    Sample Routing Decisions:
    •   3w → gemma2:2b  | Force GPU mode | Queue depth: 1
-   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 6
-   Sample Routing Decisions:
-   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 1
-   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 6
-   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 1
-   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 6
-   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 4
-   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 6
-   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 4
-   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 2
-   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 4
-   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 2
-   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 2
-   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 7
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 2
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 5
+   •   3w → gemma2:2b  | Force GPU mode | Queue depth: 4
+   •   2w → gemma2:2b  | Force GPU mode | Queue depth: 3
+
+✅ Data logged to: logs_test_b.csv
 
 
-
-
-======================================================================
 ======================================================================
 ⏸  PAUSE - Change scheduler.py for PART 2
-⏸  PAUSE - Change scheduler.py for PART 2
 ======================================================================
-
-📝 Action needed:
-   1. Edit scheduler.py
-   2. Change: force_mode = 'gpu'  →  force_mode = None
-   3. Save file
-   4. Restart FastAPI server: uvicorn app.server:app --reload
-
-⚠  Ready for PART 2 (Hybrid)? Press ENTER when server restarted...
-
-
-
-
 
 📝 Action needed:
    1. Edit scheduler.py
@@ -480,21 +421,21 @@ This test runs in 2 parts:
 📊 RESULTS:
    Success Rate: 15/15 (100.0%)
    Failed: 0
-   Total Time: 109.07s
+   Total Time: 113.08s
 
    Model Distribution:
    • GPU (gemma2:2b): 10 requests (66.7%)
    • CPU (phi3): 5 requests (33.3%)
 
    Latency:
-   • Min:      7.41s
-   • Mean:    48.08s
-   • Median:  41.95s
-   • P95:    109.06s
-   • Max:    109.06s
+   • Min:     13.25s
+   • Mean:    56.16s
+   • Median:  53.08s
+   • P95:    113.08s
+   • Max:    113.08s
 
    Throughput:
-   • Mean: 9.76 tokens/s
+   • Mean: 9.09 tokens/s
 
    Sample Routing Decisions:
    •   3w → phi3       | Tiny prompt (len=3), CPU optimal | Queue dept
@@ -502,6 +443,8 @@ This test runs in 2 parts:
    •   2w → phi3       | Tiny prompt (len=2), CPU optimal | Queue dept
    •   3w → phi3       | Tiny prompt (len=3), CPU optimal | Queue dept
    •   2w → phi3       | Tiny prompt (len=2), CPU optimal | Queue dept
+
+✅ Data logged to: logs_test_b.csv
 
 
 ======================================================================
@@ -512,10 +455,10 @@ Metric                    GPU-Only           Hybrid             Winner
 ---------------------------------------------------------------------------
 Success Rate               100.0%            100.0%           ⚖  Tie
 Failed Requests                0                  0             ⚖  Tie
-Mean Latency               69.66s            48.08s           🟢 Hybrid
-P95 Latency               122.28s           109.06s           🟢 Hybrid
-Throughput                  8.97 tok/s        9.76 tok/s      🟢 Hybrid
-Total Time                122.28s           109.07s           🟢 Hybrid
+Mean Latency               71.61s            56.16s           🟢 Hybrid
+P95 Latency               134.23s           113.08s           🟢 Hybrid
+Throughput                  8.83 tok/s        9.09 tok/s      🟢 Hybrid
+Total Time                134.23s           113.08s           🟢 Hybrid
 
 ---------------------------------------------------------------------------
 
@@ -524,16 +467,53 @@ Total Time                122.28s           109.07s           🟢 Hybrid
    Hybrid:    10/15 GPU, 5/15 CPU
 
 🎯 HYBRID IMPROVEMENTS:
-   ✅ Mean latency: 31.0% faster
-   ✅ P95 latency: 10.8% faster
+   ✅ Mean latency: 21.6% faster
+   ✅ P95 latency: 15.8% faster
 
 🎓 FOR YOUR RESEARCH PAPER:
    "Our adaptive hybrid scheduler achieved 100% success rate
-   with P95 latency of 109.1s, compared to GPU-only
-   (100% success, P95: 122.3s). The scheduler
+   with P95 latency of 113.1s, compared to GPU-only
+   (100% success, P95: 134.2s). The scheduler
    distributed workload across 5 CPU and 10 GPU requests,
-   preventing saturation and reducing tail latency by 10.8%."
+   preventing saturation and reducing tail latency by 15.8%."
 
 ======================================================================
 
+📊 All data saved to: logs_test_b.csv
+   You can analyze this CSV in Excel or Python
+
 ✅ TEST B COMPLETE - Data ready for research paper!
+
+
+
+timestamp,mode,selected_model,decision_reason,latency_s,prompt_length,output_tokens,throughput_tokens_per_s,cpu_util_before,cpu_util_after,cpu_util_delta,gpu_util_before,gpu_util_after,gpu_util_delta,cpu_mem_before_gb,cpu_mem_after_gb,gpu_mem_before_gb,gpu_mem_after_gb,gpu_mem_util_before_pct,gpu_mem_util_after_pct,test_scenario
+2025-12-01T16:23:43.461535,gpu,gemma2:2b,Force GPU mode | Queue depth: 14,16.261,10,478,29.39,58.3,50.0,-8.3,8.0,84.0,76.0,12.17,12.26,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:23:51.392795,gpu,gemma2:2b,Force GPU mode | Queue depth: 5,24.244,2,429,17.69,0.0,37.3,37.3,8.0,83.0,75.0,12.17,12.24,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:23:59.107896,gpu,gemma2:2b,Force GPU mode | Queue depth: 6,31.956,11,402,12.58,27.3,45.7,18.4,8.0,85.0,77.0,12.17,12.25,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:24:07.884325,gpu,gemma2:2b,Force GPU mode | Queue depth: 8,40.717,9,473,11.62,0.0,36.8,36.8,8.0,85.0,77.0,12.16,12.26,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:24:13.575557,gpu,gemma2:2b,Force GPU mode | Queue depth: 4,46.43,3,301,6.48,0.0,34.0,34.0,8.0,87.0,79.0,12.17,12.26,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:24:21.264796,gpu,gemma2:2b,Force GPU mode | Queue depth: 10,54.085,23,450,8.32,0.0,33.0,33.0,8.0,86.0,78.0,12.17,12.25,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:24:28.206853,gpu,gemma2:2b,Force GPU mode | Queue depth: 1,61.07,3,387,6.34,29.4,33.3,3.9,8.0,87.0,79.0,12.17,12.27,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:24:34.531825,gpu,gemma2:2b,Force GPU mode | Queue depth: 15,67.33,9,356,5.29,0.0,34.4,34.4,8.0,82.0,74.0,12.17,12.31,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:24:47.594650,gpu,gemma2:2b,Force GPU mode | Queue depth: 12,80.409,22,680,8.46,0.0,34.4,34.4,8.0,73.0,65.0,12.17,12.3,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:24:53.653425,gpu,gemma2:2b,Force GPU mode | Queue depth: 3,86.514,2,309,3.57,0.0,42.2,42.2,8.0,85.0,77.0,12.17,12.34,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:24:59.135834,gpu,gemma2:2b,Force GPU mode | Queue depth: 2,91.997,2,294,3.2,36.4,37.2,0.8,8.0,85.0,77.0,12.17,12.32,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:25:10.792853,gpu,gemma2:2b,Force GPU mode | Queue depth: 13,103.599,21,650,6.27,0.0,36.0,36.0,8.0,85.0,77.0,12.17,12.24,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:25:17.733462,gpu,gemma2:2b,Force GPU mode | Queue depth: 9,110.561,8,367,3.32,73.3,34.6,-38.7,8.0,87.0,79.0,12.17,12.26,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:25:31.218752,gpu,gemma2:2b,Force GPU mode | Queue depth: 7,124.061,23,725,5.84,0.0,34.6,34.6,8.0,84.0,76.0,12.17,12.14,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:25:41.341468,gpu,gemma2:2b,Force GPU mode | Queue depth: 11,134.159,21,547,4.08,54.5,43.5,-11.0,8.0,85.0,77.0,12.17,11.73,2.9,2.9,48.3,48.3,GPU-ONLY
+2025-12-01T16:26:57.705280,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 5",13.203,3,446,33.78,0.0,34.7,34.7,8.0,95.0,87.0,11.85,11.33,2.9,4.33,48.3,72.24,HYBRID
+2025-12-01T16:26:59.271521,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 7",14.758,2,83,5.62,70.0,38.7,-31.3,8.0,87.0,79.0,11.86,11.33,2.9,4.33,48.3,72.24,HYBRID
+2025-12-01T16:27:01.703152,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 4",17.206,2,124,7.21,0.0,39.4,39.4,8.0,91.0,83.0,11.85,11.36,2.9,4.33,48.3,72.24,HYBRID
+2025-12-01T16:27:03.567154,cpu,phi3,"Tiny prompt (len=2), CPU optimal | Queue depth: 2",19.077,2,107,5.61,46.2,33.2,-13.0,8.0,91.0,83.0,11.84,11.36,2.9,4.33,48.3,72.24,HYBRID
+2025-12-01T16:27:07.633408,cpu,phi3,"Tiny prompt (len=3), CPU optimal | Queue depth: 1",23.147,3,196,8.47,20.5,28.8,8.3,8.0,94.0,86.0,11.83,11.34,2.9,4.33,48.3,72.24,HYBRID
+2025-12-01T16:27:18.850112,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 13",34.319,23,483,14.07,0.0,27.6,27.6,8.0,84.0,76.0,11.89,11.62,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:27:26.569862,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 6",42.065,23,444,10.56,0.0,26.5,26.5,8.0,87.0,79.0,11.85,11.6,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:27:37.538727,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 8",53.024,21,619,11.67,0.0,31.3,31.3,8.0,84.0,76.0,11.86,11.61,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:27:47.183680,gpu,gemma2:2b,"CPU overloaded (90.0%), offloading to GPU | Queue depth: 3",62.687,21,518,8.26,90.0,33.9,-56.1,8.0,85.0,77.0,11.85,11.61,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:27:57.371828,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 10",72.849,10,598,8.21,0.0,34.9,34.9,8.0,85.0,77.0,11.87,11.62,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:28:03.934245,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 12",79.406,9,368,4.63,0.0,35.4,35.4,8.0,86.0,78.0,11.87,11.6,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:28:15.933752,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 9",91.413,22,650,7.11,0.0,34.1,34.1,8.0,86.0,78.0,11.87,11.6,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:28:23.957229,gpu,gemma2:2b,"CPU overloaded (83.3%), offloading to GPU | Queue depth: 11",99.433,9,439,4.42,83.3,34.6,-48.7,8.0,85.0,77.0,11.87,11.6,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:28:30.478723,gpu,gemma2:2b,"Small prompt, GPU available (util=8.0%) | Queue depth: 14",105.944,8,350,3.3,0.0,31.7,31.7,8.0,86.0,78.0,11.89,11.6,2.9,2.9,48.3,48.3,HYBRID
+2025-12-01T16:28:37.531864,gpu,gemma2:2b,"CPU overloaded (100.0%), offloading to GPU | Queue depth: 15",112.994,11,381,3.37,100.0,25.7,-74.3,8.0,86.0,78.0,11.89,11.59,2.9,2.9,48.3,48.3,HYBRID

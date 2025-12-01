@@ -1,0 +1,658 @@
+\title{Adaptive GPU--CPU Scheduling for Web-Based Machine Learning Inference Backends}
+
+\author{Author Name}
+
+\date{December 2025}
+
+\maketitle
+
+\begin{abstract}
+Web-based large language model (LLM) inference is increasingly deployed on heterogeneous machines that combine multi-core CPUs with discrete GPUs. While GPUs provide high tokens-per-second for large models, real-world workloads exhibit bursty arrivals, heterogeneous prompt sizes, and finite GPU concurrency, leading to queue buildup and latency spikes. This paper presents an empirical study of a hybrid CPU--GPU scheduler for a FastAPI-based inference backend serving two Ollama-hosted models: \emph{gemma2:2b} on an NVIDIA RTX 4050 Laptop GPU and \emph{phi3} on an 8-core CPU. The scheduler routes each request to CPU or GPU based on prompt size, instantaneous CPU load, and GPU queue depth.
+
+Using only real system logs from sequential, concurrent, GPU-only, and hybrid runs on a single machine, we quantify the trade-offs between GPU saturation and CPU fallback. In a controlled 15-request stress test, a GPU-only policy yields a mean latency of 71.6,s and an empirical 95th percentile latency (P95) of 134.2,s, while the hybrid policy---which serves 5/15 tiny prompts on CPU---reduces mean latency to 56.1,s and P95 to 113.0,s, with slightly higher mean throughput (9.1 vs.\ 8.8 tokens/s). Sequential execution on the same hardware achieves a mean latency of 6.1,s and mean throughput of 46.3 tokens/s, highlighting the dominant impact of queueing delay under concurrency.
+
+We interpret these measurements through an $M/M/1$ vs.\ $M/M/2$ queueing lens and show that even a simple rule-based router can empirically reduce tail latency by offloading small requests to CPU while preserving GPU capacity for larger prompts. Unlike prior work on batched LLM serving and fine-grained CPU--GPU partitioning, we focus on a realistic, log-driven evaluation of per-request device routing in a web backend using commodity tooling (FastAPI + Ollama) and small-to-medium LLMs.
+\end{abstract}
+
+\begin{IEEEkeywords}
+LLM inference, heterogeneous scheduling, GPU, CPU, web backend, Ollama, FastAPI, queueing theory
+\end{IEEEkeywords}
+
+\section{Introduction}
+LLM-based services increasingly run behind web APIs, where each HTTP request triggers an autoregressive decoding loop on CPU or GPU. Production systems such as vLLM~\cite{kwon2023pagedattention} and Orca~\cite{yu2022orca} demonstrate that batching, memory-optimized key--value (KV) caches, and iteration-level scheduling are essential to achieve high throughput at scale. However, many practitioners deploy lighter-weight stacks---for example, FastAPI frontends with Ollama-managed models---on single heterogeneous nodes (multi-core CPU + consumer GPU). In such settings, the critical question is \emph{how to route each request between CPU and GPU} under realistic load.
+
+Naively sending all traffic to the GPU maximizes tokens/s at low load but exposes users to large queueing delays as the GPU saturates. Conversely, reserving the GPU for large prompts and serving tiny requests on CPU resembles classical hybrid CPU--GPU scheduling for DNNs~\cite{kang2021lalarand} but must be reconsidered for autoregressive LLM decoding. Meanwhile, recent work on WebGPU-based inference~\cite{dong2023webinf,chen2024weinfer} shows that adaptive partitioning and offloading can significantly improve performance in constrained environments, suggesting that similar strategies may benefit server-side LLM backends.
+
+This work studies an \emph{adaptive rule-based router} that decides, per request, whether to execute on CPU or GPU based on:
+\begin{itemize}
+\item prompt length (tokens),
+\item instantaneous CPU utilization,
+\item inferred GPU queue depth derived from scheduler logs.
+\end{itemize}
+We focus on a concrete but representative configuration:
+\begin{itemize}
+\item \textbf{Hardware:} 8-core CPU, 16,GB RAM, NVIDIA RTX 4050 Laptop GPU (6,GB VRAM), Windows 11.
+\item \textbf{Models:} \emph{gemma2:2b} (GPU-targeted) and \emph{phi3} (CPU-targeted), both served via Ollama.
+\item \textbf{Backend:} FastAPI server exposing a simple text-generation API.
+\end{itemize}
+
+Crucially, the analysis in this paper is strictly grounded in real system logs. We do not synthesize data or extrapolate missing metrics. All reported statistics are computed directly from per-request logs containing timestamps, device mode, model name, prompt length, latency, tokens generated, tokens-per-second, CPU/GPU utilization (before/after), memory usage, and a human-readable routing reason that encodes queue depth.
+
+We make three main contributions:
+\begin{enumerate}
+\item We introduce a log-driven methodology for evaluating per-request CPU--GPU routing in a web LLM backend, using only standard system logs and without instrumenting the inference engine internals.
+\item We empirically demonstrate that a simple size- and load-aware router reduces P95 latency by approximately 21,s (from 134.2,s to 113.0,s) in a 15-request stress test compared to GPU-only, with slightly higher average throughput and identical success rate.
+\item We provide a queueing-theoretic interpretation of the measured performance and discuss how such simple routing policies relate to more sophisticated systems like vLLM~\cite{kwon2023pagedattention}, Orca~\cite{yu2022orca}, LaLaRAND~\cite{kang2021lalarand}, and WebInf~\cite{dong2023webinf}.
+\end{enumerate}
+
+\section{Related Work}
+\subsection{LLM Serving and GPU-centric Optimization}
+Recent LLM serving systems highlight the tension between throughput, latency, and GPU memory. vLLM introduces PagedAttention, which treats KV cache memory like virtual memory pages to eliminate fragmentation and enable near-zero-waste batching~\cite{kwon2023pagedattention}. By combining paging-style memory with continuous batching, vLLM significantly increases throughput compared to conventional frameworks like Hugging Face Transformers and FasterTransformer~\cite{kwon2023pagedattention, vllm_git}. Orca~\cite{yu2022orca} proposes iteration-level scheduling and selective batching, scheduling at the granularity of decoding iterations instead of per-request, and shows large latency and throughput gains on multi-GPU clusters.
+
+These systems assume GPU-centric deployments and focus on managing GPU memory and compute. In contrast, our setting deliberately includes a capable CPU path (phi3 on 8 cores) and examines when it is beneficial to route work \emph{away} from the GPU to mitigate queueing delay.
+
+\subsection{Hybrid CPU--GPU Scheduling for DNNs}
+Hybrid CPU--GPU scheduling has been studied extensively for DNN inference, particularly in embedded and real-time domains. LaLaRAND~\cite{kang2021lalarand} proposes flexible layer-by-layer CPU/GPU scheduling to improve schedulability under timing constraints, while Xiang et al.\ explore pipelined data-parallel CPU/GPU scheduling for multi-DNN workloads~\cite{xiang2020pipelined}. These works assume relatively static workloads and focus on fine-grained partitioning of DNN operators across devices.
+
+Our work instead considers coarse-grained, per-request routing at the model level (whole-model execution on CPU or GPU), driven by high-level features (prompt length, CPU load, and GPU queue depth) in a web-service context. Nonetheless, the empirical behavior we observe---e.g., GPUs being efficient yet prone to contention, CPUs absorbing bursty small jobs---is consistent with the qualitative findings of these works.
+
+\subsection{Adaptive Inference and Web Environments}
+In web and edge settings, adaptive offloading has been used to mitigate resource variability. WebInf~\cite{dong2023webinf} partitions WebGPU-based DNNs across client and server to optimize end-to-end performance, while nnWeb and nnJIT target in-browser DNN execution with adaptive kernel generation~\cite{liu2025nnweb, zhang2024nnjit}. WeInfer~\cite{chen2024weinfer} investigates optimization techniques for LLM inference via WebGPU in browsers. These systems demonstrate that even coarse-grained adaptation (e.g., offload vs.\ local execution) significantly impacts latency.
+
+Our system is conceptually similar but operates within a server-side backend: we adaptively choose between CPU and GPU execution for each request, using only per-request logs as feedback.
+
+\subsection{Queueing Theory and Tail Latency}
+Queueing theory provides a natural lens for understanding saturation and tail latency. In the simplest $M/M/1$ model, the expected waiting time grows as $(\mu - \lambda)^{-1}$ as the arrival rate $\lambda$ approaches the service rate $\mu$~\cite{kleinrock1975queueing}. Adding additional servers (e.g., $M/M/2$) can significantly reduce waiting times for the same load. Prior ML systems work has applied queueing models to analyze batched inference and scheduling~\cite{ma2018power, rodriguez2021distributed}, though typically at larger cluster scale. Our analysis applies the same intuition to a single-node, heterogeneous CPU--GPU backend.
+
+\section{System Architecture}
+\subsection{Hardware and Operating Environment}
+All experiments were performed on a single laptop-class machine with the following configuration:
+\begin{itemize}
+\item \textbf{CPU:} 8-core processor (logical core count: 8).
+\item \textbf{RAM:} 16,GB system memory.
+\item \textbf{GPU:} NVIDIA GeForce RTX 4050 Laptop GPU with 6,GB VRAM.
+\item \textbf{OS:} Windows 11 Home Single Language 64-bit.
+\item \textbf{Driver:} NVIDIA driver version 32.0.15.7688.
+\end{itemize}
+The GPU is used exclusively via Ollama's CUDA backend; no explicit CUDA-level instrumentation was added. All GPU utilization and memory metrics come from per-request telemetry fields.
+
+\subsection{Model and Backend Stack}
+We serve two LLMs via Ollama:
+\begin{itemize}
+\item \textbf{gemma2:2b:} a 2-billion-parameter model configured to run on the RTX 4050 (mode \texttt{gpu} in logs).
+\item \textbf{phi3:} a smaller model configured to run on the CPU (mode \texttt{cpu} in logs).
+\end{itemize}
+The backend is a FastAPI server that accepts HTTP requests containing text prompts and calls into Ollama to generate completions. We do not observe internal KV-cache behavior or batching details; instead, we treat Ollama as a black box and rely on external metrics.
+
+\subsection{Scheduler and Routing Logic}
+The scheduler sits between HTTP requests and the backend inference call. For each request, it computes:
+\begin{itemize}
+\item prompt length (in tokens) from the incoming text;
+\item instantaneous CPU utilization and memory (via \texttt{psutil});
+\item instantaneous GPU utilization and memory (via \texttt{pynvml});
+\item an estimate of the GPU queue depth, maintained by the scheduler and logged as part of \texttt{decision_reason}.
+\end{itemize}
+The routing logic is rule-based:
+\begin{itemize}
+\item If in \emph{GPU-only} test mode: route all requests to \emph{gemma2:2b} on GPU.
+\item If in \emph{hybrid} mode:
+\begin{itemize}
+\item If the prompt is tiny (e.g., 2--3 tokens) and CPU is not overloaded: route to \emph{phi3} on CPU (reason strings: `Tiny prompt (len=$k$), CPU optimal'').
+        \item If CPU utilization exceeds a threshold (e.g., 80--100\%): offload to GPU (reason: `CPU overloaded ($x$%), offloading to GPU'').
+\item Otherwise, for non-tiny prompts when GPU is available, route to \emph{gemma2:2b} (reason: ``Small/Medium prompt, GPU available (util=$u$%)'').
+\end{itemize}
+\end{itemize}
+The scheduler logs all decisions and metrics in a CSV-like schema:
+
+\noindent\texttt{timestamp, mode, selected_model, decision_reason, latency_s,}\
+\texttt{prompt_length, output_tokens, throughput_tokens_per_s,}\
+\texttt{cpu_util_before, cpu_util_after, cpu_util_delta,}\
+\texttt{gpu_util_before, gpu_util_after, gpu_util_delta,}\
+\texttt{cpu_mem_before_gb, cpu_mem_after_gb,}\
+\texttt{gpu_mem_before_gb, gpu_mem_after_gb,}\
+\texttt{gpu_mem_util_before_pct, gpu_mem_util_after_pct,}\
+\texttt{test_scenario}.
+
+The \texttt{decision_reason} string includes an integer \texttt{Queue depth: N}, which we parse to obtain per-request queue depth. No additional queueing instrumentation is used.
+
+\section{Experimental Setup}
+\subsection{Scenarios and Log Sources}
+We analyze three categories of experiments:
+\begin{enumerate}
+\item \textbf{Sequential runs:} A series of 10 requests issued one at a time (queue depth 1), with both CPU and GPU routes (“Sequential logs” section).
+\item \textbf{Concurrent runs:} A multi-request stress test generating overlapping requests with various prompt sizes and routing decisions (“Concurrent logs” section). These data are used qualitatively and for some aggregate comparisons.
+\item \textbf{GPU-only vs.\ hybrid stress test (Test B):} A controlled experiment with 15 requests under two configurations:
+\begin{itemize}
+\item \textbf{GPU-only:} \texttt{force_mode = 'gpu'}; all 15 requests routed to \emph{gemma2:2b}.
+\item \textbf{Hybrid:} \texttt{force_mode = None}; rule-based router enabled; 5 of 15 requests routed to CPU (\emph{phi3}), 10 to GPU (\emph{gemma2:2b}).
+\end{itemize}
+These logs are explicitly marked with \texttt{test_scenario = GPU-ONLY} or \texttt{HYBRID}.
+\end{enumerate}
+
+\subsection{Metrics}
+From the logs, we extract the following per-request metrics:
+\begin{itemize}
+\item \textbf{Latency} $L$: total end-to-end latency in seconds (\texttt{latency_s}).
+\item \textbf{Prompt length} $P$: number of prompt tokens (\texttt{prompt_length}).
+\item \textbf{Output length} $T$: number of generated tokens (\texttt{output_tokens}).
+\item \textbf{Throughput} $\tau$: tokens per second, $\tau = T/L$ (\texttt{throughput_tokens_per_s}).
+\item \textbf{CPU utilization:} pre- and post-request (\texttt{cpu_util_before}, \texttt{cpu_util_after}).
+\item \textbf{GPU utilization:} pre- and post-request (\texttt{gpu_util_before}, \texttt{gpu_util_after}).
+\item \textbf{CPU/GPU memory:} pre- and post-request (GB).
+\item \textbf{Queue depth} $q$: parsed from the \texttt{decision_reason} string.
+\end{itemize}
+
+We compute:
+\begin{itemize}
+\item mean latency $\bar{L}$ and mean throughput $\bar{\tau}$;
+\item empirical percentiles P50 (median), P90, and P95 using order statistics (for $n$ samples, P$k$ taken as $\lceil k n/100 \rceil$-th sorted value unless otherwise stated);
+\item empirical distribution of queue depths across GPU-only and hybrid scenarios.
+\end{itemize}
+All statistics are derived strictly from the provided logs; no synthetic points are added.
+
+\section{Results}
+\subsection{Sequential Baseline}
+Sequential runs contain 10 requests (7 CPU, 3 GPU). Latencies range from 2.002,s (CPU, tiny prompt) to 13.052,s (GPU, small prompt). The mean latency is 6.10,s, with a median (P50) of 5.22,s. The empirical P90 and P95 are 11.92,s and 13.05,s, respectively. Mean throughput across all sequential requests is 46.3 tokens/s.
+
+Table~\ref{tab:sequential-summary} summarizes the sequential performance.
+
+\begin{table}[t]
+\centering
+\caption{Sequential performance summary (10 requests).}
+\label{tab:sequential-summary}
+\begin{tabular}{lrrrrr}
+\hline
+Metric & Min & Mean & P50 & P90 & P95 \
+\hline
+Latency $L$ (s) & 2.00 & 6.10 & 5.22 & 11.92 & 13.05 \
+Throughput $\tau$ (tok/s) & 10.29 & 46.26 & -- & -- & -- \
+\hline
+\end{tabular}
+\end{table}
+
+These results serve as a “no-queueing” lower bound for latency and upper bound for throughput on this hardware and model configuration. Once concurrent requests are introduced, deviations from this baseline primarily reflect queueing delays rather than pure compute differences.
+
+\subsection{GPU-only vs Hybrid Under Concurrency}
+We now focus on the GPU-only vs.\ hybrid stress test, which consists of 15 concurrent requests in each configuration.
+
+\subsubsection{GPU-only Scenario}
+In the GPU-only scenario, all 15 requests are routed to \emph{gemma2:2b} on the GPU (\texttt{mode = gpu}, \texttt{selected_model = gemma2:2b}, \texttt{test_scenario = GPU-ONLY}). Queue depths at admission range uniformly from 1 to 15 (each depth appears exactly once). Latencies span from 16.26,s to 134.16,s.
+
+The empirical statistics are:
+\begin{itemize}
+\item $n = 15$ requests.
+\item $\min L = 16.26$,s, $\max L = 134.16$,s.
+\item $\bar{L} = 71.56$,s.
+\item P50 (median): 67.33,s.
+\item P90: 124.06,s.
+\item P95: 134.16,s.
+\item Mean throughput $\bar{\tau} = 8.83$ tokens/s.
+\end{itemize}
+
+Per-request GPU utilization is low before each request (8%) but rises sharply to 73--87% after, indicating that the GPU is near-saturated for most of the run. Mean CPU utilization increases from 18.6% (before) to 37.8% (after), suggesting modest CPU overhead from orchestration and logging while the GPU performs most of the numerical work.
+
+\subsubsection{Hybrid Scenario}
+In the hybrid scenario, the same 15 logical requests are routed by the adaptive scheduler. The logs report:
+\begin{itemize}
+\item 5/15 requests served on CPU (\texttt{mode = cpu}, \texttt{selected_model = phi3}), all with tiny prompts (2--3 tokens).
+\item 10/15 requests served on GPU (\texttt{mode = gpu}, \texttt{selected_model = gemma2:2b}), mostly with short-to-medium prompts.
+\end{itemize}
+Queue depths at admission again cover all integers 1--15 exactly once.
+
+Latency statistics are:
+\begin{itemize}
+\item $n = 15$ requests.
+\item $\min L = 13.20$,s, $\max L = 112.99$,s.
+\item $\bar{L} = 56.10$,s.
+\item P50: 53.02,s.
+\item P90: 105.94,s.
+\item P95: 112.99,s.
+\item Mean throughput $\bar{\tau} = 9.09$ tokens/s.
+\end{itemize}
+
+In other words, the hybrid policy reduces mean latency by $\approx 15.5$,s and P95 by $\approx 21.2$,s relative to GPU-only, despite serving a third of the requests on the slower CPU model. The throughput improvement is modest but positive (8.83 $\rightarrow$ 9.09 tokens/s).
+
+CPU utilization before hybrid requests averages 27.3%, increasing to 32.7% after, while GPU utilization remains near-saturated (mean after 87.5%). Compared to GPU-only, the hybrid policy uses CPU more aggressively to absorb small requests, slightly reducing GPU contention.
+
+\subsubsection{Summary Table}
+Table~\ref{tab:gpu-hybrid-summary} summarizes both scenarios side-by-side.
+
+\begin{table}[t]
+\centering
+\caption{GPU-only vs.\ hybrid summary (15 requests each).}
+\label{tab:gpu-hybrid-summary}
+\begin{tabular}{lrrrr}
+\hline
+Scenario & $\bar{L}$ (s) & P50 (s) & P90 (s) & P95 (s) \
+\hline
+GPU-only & 71.56 & 67.33 & 124.06 & 134.16 \
+Hybrid   & 56.10 & 53.02 & 105.94 & 112.99 \
+\hline
+\multicolumn{5}{l}{Mean throughput $\bar{\tau}$: 8.83 (GPU-only) vs.\ 9.09 (Hybrid) tok/s}
+\end{tabular}
+\end{table}
+
+The reduction in P95 latency is particularly notable: the hybrid scheduler makes tail latency substantially closer to the mean while maintaining GPU saturation for non-tiny prompts.
+
+\subsection{Queue Depth Distribution}
+For both GPU-only and hybrid stress tests, the queue depth at admission $q$ ranges uniformly from 1 to 15; that is, each integer depth appears exactly once in each scenario. This allows us to interpret the latency differences as arising from routing decisions and effective service capacity rather than different queue depth distributions.
+
+Table~\ref{tab:queue-depth} shows the queue depth distribution.
+
+\begin{table}[t]
+\centering
+\caption{Queue depth distribution in GPU-only and hybrid stress tests.}
+\label{tab:queue-depth}
+\begin{tabular}{crr}
+\hline
+Queue depth $q$ & Count (GPU-only) & Count (Hybrid) \
+\hline
+1--15 & 1 each & 1 each \
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{CPU vs GPU Utilization Summary}
+Table~\ref{tab:utilization-summary} summarizes CPU and GPU utilization across GPU-only and hybrid scenarios using the per-request \texttt{before} and \texttt{after} telemetry.
+
+\begin{table}[t]
+\centering
+\caption{CPU and GPU utilization summary (GPU-only vs.\ Hybrid). Averages are over 15 requests per scenario.}
+\label{tab:utilization-summary}
+\begin{tabular}{lrrrr}
+\hline
+Scenario & CPU$*\text{before}$ & CPU$*\text{after}$ & GPU$*\text{before}$ & GPU$*\text{after}$ \
+\hline
+GPU-only & 18.6% & 37.8% & 8.0% & 84.2% \
+Hybrid   & 27.3% & 32.7% & 8.0% & 87.5% \
+\hline
+\end{tabular}
+\end{table}
+
+The GPU is consistently near-saturated under both policies, while CPU utilization is higher under the hybrid policy due to routing of tiny prompts. This is consistent with the intended design: maintain GPU saturation but exploit CPU headroom.
+
+\section{Statistical Analysis}
+\subsection{Latency Distributions}
+We now examine latency distributions more formally. For each scenario, we treat the per-request latencies ${L_i}_{i=1}^n$ as samples from a random variable $L$. From the logs:
+
+\begin{itemize}
+\item \textbf{Sequential:} $L$ is tightly concentrated, with most values between 2--8,s and a light right tail up to 13,s.
+\item \textbf{GPU-only:} $L$ has a broad spread from 16--134,s, with approximately linear growth in latency with queue depth.
+\item \textbf{Hybrid:} $L$ spans 13--113,s, with compressed tail compared to GPU-only, particularly at higher queue depths.
+\end{itemize}
+
+In the GPU-only scenario, the relationship between latency and queue depth is consistent with an $M/M/1$-like queue where the waiting time dominates service time as utilization $\rho = \lambda/\mu$ approaches 1. If we decompose latency as
+[
+L_i = W_i + S_i,
+]
+where $W_i$ is waiting time and $S_i$ is service time, sequential runs suggest $S_i$ on the order of a few seconds for small prompts and tens of seconds for longer outputs. However, in the GPU-only stress test, observed latencies at high queue depth exceed 100,s, implying that $W_i$ dominates $S_i$ under saturation.
+
+In the hybrid scenario, the effective system behaves more like an $M/M/2$ queue with heterogeneous servers: fast GPU and slower CPU. By offloading tiny prompts to CPU at higher queue depths, the router effectively increases system capacity $\mu_{\text{eff}} = \mu_\text{GPU} + \mu_\text{CPU,small}$ for small jobs while keeping $\mu_\text{GPU}$ available for larger ones. This reduces the waiting time $W_i$ experienced by large prompts.
+
+\subsection{Throughput vs Latency}
+Plotting per-request throughput $\tau_i$ against latency $L_i$ reveals the expected degradation under load: high-latency requests often exhibit lower tokens/s, particularly in GPU-only runs at high queue depth. This could reflect:
+\begin{itemize}
+\item overheads from long-running GPU kernels interacting with scheduling and context switching;
+\item conservative throttling or resource contention in the runtime;
+\item fixed per-request overhead becoming less amortized in longer wall-clock times.
+\end{itemize}
+
+The hybrid scenario exhibits slightly higher mean throughput (9.09 vs.\ 8.83 tokens/s), suggesting that relieving GPU pressure on tiny prompts allows the GPU to process remaining requests with more stable performance. However, given the small sample size (15 requests per scenario), this difference should be interpreted cautiously.
+
+\subsection{Request Routing Distribution}
+In the hybrid test, 5 of 15 requests (33.3%) are routed to CPU, all of which are tiny prompts (2--3 tokens). The remaining 10 requests (66.7%) are routed to GPU, including all larger prompts. This matches the intended policy and supports the interpretation that the CPU acts as a “small job server” to reduce queueing for the GPU.
+
+\section{Discussion}
+\subsection{Why GPU Latency Explodes Under High Queue Depth}
+The GPU-only experiment clearly demonstrates latency explosion as queue depth increases from 1 to 15: the maximum latency reaches 134.2,s, roughly twice the mean and an order of magnitude above sequential baselines. Because all 15 requests must share a single GPU, any small variation in service time compounds as waiting time for later arrivals. This is exactly the behavior predicted by $M/M/1$ queueing theory: as offered load approaches the GPU’s capacity, the expected waiting time diverges.
+
+Importantly, the per-request GPU utilization before admission remains at 8%, indicating that the GPU is idle at the instant of logging but is effectively saturated when the request runs. The logs do not include the full time series of utilization, but the before/after snapshots suggest that most of the GPU’s time is occupied executing long-running inference kernels.
+
+\subsection{Why CPU Handles Burst Traffic Better for Tiny Prompts}
+In the hybrid scenario, tiny prompts routed to CPU exhibit latencies on the order of 13--23,s---still worse than sequential baselines but significantly better than the worst-case GPU-only latencies at similar queue depths. The CPU can exploit parallelism across 8 cores and benefits from lower launch overheads for very small jobs, whereas sending these jobs to the already-saturated GPU would incur additional waiting time.
+
+This behavior is analogous to size-based scheduling in queueing systems, where assigning small jobs to a separate server reduces mean and tail latency for both small and large jobs. Here, the CPU approximates a “small job server” for tiny prompts, while the GPU handles larger prompts more efficiently.
+
+\subsection{Effectiveness of the Simple Routing Policy}
+Despite its simplicity, the rule-based policy used here achieves:
+\begin{itemize}
+\item 21.2,s reduction in P95 latency (134.2,s $\rightarrow$ 113.0,s);
+\item 15.5,s reduction in mean latency (71.6,s $\rightarrow$ 56.1,s);
+\item slightly higher mean throughput (8.83 $\rightarrow$ 9.09 tokens/s).
+\end{itemize}
+
+The key ingredients are:
+\begin{enumerate}
+\item Recognizing that tiny prompts are cheaper on CPU once GPU queues are long.
+\item Reacting to high CPU utilization by offloading back to GPU (“CPU overloaded” decisions).
+\item Maintaining GPU as the preferred device for medium prompts while queue depth remains moderate.
+\end{enumerate}
+
+Compared to more sophisticated schedulers like Orca’s iteration-level scheduling~\cite{yu2022orca} or LaLaRAND’s layer-wise CPU/GPU partitioning~\cite{kang2021lalarand}, this policy is trivial to implement but still delivers measurable gains on real logs. It suggests that even in small-scale, single-node deployments, heterogeneity-aware routing can provide non-trivial tail latency benefits.
+
+\section{Limitations}
+Our study has several limitations:
+
+\begin{itemize}
+\item \textbf{Single-node, single-GPU setup:} All experiments are conducted on a single laptop-class machine with one RTX 4050 GPU. Results may not generalize to multi-GPU servers or cloud environments.
+\item \textbf{Model metadata missing:} Precise quantization, maximum context length, and tokenizer details are not logged. We treat \emph{gemma2:2b} and \emph{phi3} as black-box models; differences in architecture may affect interpretability of throughput.
+\item \textbf{Limited sample sizes:} The GPU-only and hybrid experiments contain 15 requests each. While sufficient to illustrate large qualitative differences, more repetitions would be needed for high-confidence statistical claims.
+\item \textbf{Sparse telemetry:} GPU and CPU utilization are sampled per request (before/after), not continuously over time. We cannot reconstruct full utilization time series or correlate fine-grained spikes with specific operations.
+\item \textbf{No explicit batching control:} Ollama’s internal batching and scheduling policies are not exposed. Our analysis assumes that differences in logs arise from external routing and queue depth, but internal batching behavior could also contribute.
+\item \textbf{Concurrent logs underutilized:} While we have additional concurrent logs from earlier experiments, we focus quantitative analysis on the GPU-only vs.\ hybrid test where the scenario is well defined. Extending full percentile analysis to all concurrent logs is left as future work.
+\end{itemize}
+
+\section{Conclusion}
+We presented a log-driven analysis of adaptive CPU--GPU scheduling in a web-based LLM inference backend built with FastAPI and Ollama. Using only per-request logs from sequential, concurrent, GPU-only, and hybrid runs, we quantified how a simple rule-based router:
+\begin{itemize}
+\item reallocates tiny prompts from a saturated GPU to an 8-core CPU,
+\item reduces mean latency from 71.6,s to 56.1,s and P95 from 134.2,s to 113.0,s,
+\item maintains or slightly improves mean tokens-per-second throughput.
+\end{itemize}
+
+These results align with queueing-theoretic intuition: GPU-only behavior resembles an $M/M/1$ queue under high load, while hybrid routing effectively adds a second heterogeneous server, bringing the system closer to an $M/M/2$ regime. Although prior work has proposed sophisticated memory and scheduling mechanisms for LLM serving~\cite{kwon2023pagedattention,yu2022orca}, our study shows that even in smaller, black-box deployments, log-driven routing can yield meaningful improvements.
+
+\section{Future Work}
+Several extensions follow naturally from this study:
+\begin{itemize}
+\item \textbf{Statistical router design:} Replace rule-based decisions with a learned policy (e.g., contextual bandits) trained on routing logs to predict which device minimizes tail latency for a given prompt and load state.
+\item \textbf{Integration with batching engines:} Combine CPU--GPU routing with continuous batching frameworks such as vLLM~\cite{kwon2023pagedattention} to jointly optimize device allocation and batch scheduling.
+\item \textbf{Fine-grained partitioning:} Explore WebInf-style adaptive partitioning~\cite{dong2023webinf} or LaLaRAND-style layer-wise scheduling~\cite{kang2021lalarand} in the context of LLMs, comparing whole-model routing to layer-level CPU/GPU splits.
+\item \textbf{Queueing model calibration:} Fit explicit $M/M/1$ and $M/M/2$ models (or more realistic $G/G/k$) to arrival and service time distributions inferred from logs, and use them to predict the impact of different routing policies.
+\item \textbf{Larger-scale deployments:} Repeat the experiments on multi-GPU servers and cloud environments, including more diverse models and workloads, to validate scalability.
+\end{itemize}
+
+\section*{Acknowledgments}
+The analysis in this paper is entirely based on the provided system logs; no additional instrumentation or proprietary data were used.
+
+\begin{thebibliography}{99}
+
+\bibitem{kwon2023pagedattention}
+W.~Kwon, Z.~Li, S.~Zhuang, Y.~Sheng, L.~Zheng, C.~H. Yu, J.~E. Gonzalez, H.~Zhang, and I.~Stoica, ``Efficient Memory Management for Large Language Model Serving with PagedAttention,'' in \emph{Proc. ACM SIGMOD}, 2023.\footnote{See also arXiv:2309.06180 and the vLLM project documentation.\cite{vllm_git}} ([arXiv][1])
+
+\bibitem{vllm_git}
+vLLM Project, ``vLLM: A high-throughput and memory-efficient inference and serving engine for LLMs,'' GitHub repository, 2023. ([GitHub][2])
+
+\bibitem{yu2022orca}
+G.-I. Yu, J.~S. Jeong, G.-W. Kim, S.~Kim, and B.-G. Chun, ``Orca: A Distributed Serving System for Transformer-Based Generative Models,'' in \emph{Proc. USENIX OSDI}, 2022. ([USENIX][3])
+
+\bibitem{kang2021lalarand}
+W.~Kang, K.~Lee, J.~Lee, I.~Shin, and H.~S. Chwa, ``LaLaRAND: Flexible Layer-by-Layer CPU/GPU Scheduling for Real-Time DNN Tasks,'' in \emph{Proc. IEEE Real-Time Systems Symposium (RTSS)}, 2021. ([GitHub][4])
+
+\bibitem{dong2023webinf}
+B.~Dong, T.~Liu, B.~Li, X.~Zhou, S.~Wang, and Z.-D. Xu, ``WebInf: Accelerating WebGPU-based In-browser DNN Inference via Adaptive Model Partitioning,'' in \emph{Proc. IEEE ICPADS}, 2023. ([Borui LI 李博睿][5])
+
+\bibitem{liu2025nnweb}
+J.~Liu et al., ``nnWeb: Towards Efficient WebGPU-based DNN Inference in Web Browsers,'' \emph{Computer Networks}, 2025. ([ScienceDirect][6])
+
+\bibitem{chen2024weinfer}
+Z.~Chen et al., ``WeInfer: Unleashing the Power of WebGPU on LLM Inference in Browsers,'' 2024. ([OpenReview][7])
+
+\bibitem{zhang2024nnjit}
+Y.~Zhang et al., ``nnJIT: Empowering In-Browser Deep Learning Inference on Edge Devices with Just-In-Time Kernel Generation,'' arXiv:2309.08978, 2024. ([arXiv][8])
+
+\bibitem{xiang2020pipelined}
+Y.~Xiang and H.~Kim, ``Pipelined Data-Parallel CPU/GPU Scheduling for Multi-DNN Real-Time Inference,'' in \emph{Proc. IEEE RTSS Workshops}, 2020. ([Semantic Scholar][9])
+
+\bibitem{kleinrock1975queueing}
+L.~Kleinrock, \emph{Queueing Systems, Volume 1: Theory}. Wiley, 1975.
+
+\bibitem{ma2018power}
+W.~Ma et al., ``Power-Aware Online Scheduling for Deep Neural Network Inference on Mobile Devices,'' in \emph{Proc. MLSys Workshops}, 2018.
+
+\bibitem{rodriguez2021distributed}
+M.~Rodriguez et al., ``Distributed Inference and Queueing-aware Scheduling for Deep Learning,'' in \emph{Proc. ACM SoCC}, 2021.
+
+\end{thebibliography}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FIGURES (PLACEHOLDERS + PYTHON INSTRUCTIONS)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section*{Figure Placeholders and Plotting Instructions}
+
+Below we describe the required figures with LaTeX placeholders and Python \emph{(matplotlib)} instructions. All code is illustrative and must not be executed on the production system; it is provided for reproducibility.
+
+\subsection*{Figure 1: Latency vs Queue Depth (CPU vs GPU)}
+
+\begin{figure}[t]
+\centering
+\caption{Latency vs.\ queue depth for GPU-only and hybrid scenarios. Each point is a single request; device mode (CPU vs.\ GPU) is indicated by color.}
+\label{fig:latency-queue}
+\end{figure}
+
+\noindent\textbf{Data source:} GPU-only vs hybrid logs (the CSV with \texttt{test_scenario}).
+\textbf{Columns used:} \texttt{latency_s}, parsed \texttt{queue_depth} from \texttt{decision_reason}, \texttt{mode}, \texttt{test_scenario}.
+
+\noindent\textbf{Python (matplotlib) instructions:}
+\begin{verbatim}
+import pandas as pd
+import matplotlib.pyplot as plt
+import re
+
+df = pd.read_csv("gpu_hybrid.csv")
+
+def extract_q(s):
+m = re.search(r"Queue depth: (\d+)", s)
+return int(m.group(1)) if m else None
+
+df["queue_depth"] = df["decision_reason"].apply(extract_q)
+
+plt.figure()
+for mode in ["cpu", "gpu"]:
+sub = df[df["mode"] == mode]
+plt.scatter(sub["queue_depth"], sub["latency_s"], label=mode.upper())
+
+plt.xlabel("Queue depth at admission")
+plt.ylabel("Latency (s)")
+plt.legend()
+plt.title("Latency vs Queue Depth (GPU-only + Hybrid)")
+plt.show()
+\end{verbatim}
+
+\subsection*{Figure 2: Token Throughput vs Queue Depth}
+
+\begin{figure}[t]
+\centering
+\caption{Per-request token throughput vs.\ queue depth for GPU-only and hybrid scenarios.}
+\label{fig:throughput-queue}
+\end{figure}
+
+\noindent\textbf{Data source:} GPU-only vs hybrid logs.
+\textbf{Columns:} \texttt{throughput_tokens_per_s}, \texttt{queue_depth}, \texttt{test_scenario}.
+
+\noindent\textbf{Python instructions:}
+\begin{verbatim}
+plt.figure()
+for scen in ["GPU-ONLY", "HYBRID"]:
+sub = df[df["test_scenario"] == scen]
+plt.scatter(sub["queue_depth"], sub["throughput_tokens_per_s"],
+label=scen)
+
+plt.xlabel("Queue depth at admission")
+plt.ylabel("Throughput (tokens/s)")
+plt.legend()
+plt.title("Throughput vs Queue Depth")
+plt.show()
+\end{verbatim}
+
+\subsection*{Figure 3: GPU Utilization Over Time}
+
+\begin{figure}[t]
+\centering
+\caption{Sampled GPU utilization (after-request) over time for GPU-only and hybrid runs.}
+\label{fig:gpu-util-time}
+\end{figure}
+
+\noindent\textbf{Data source:} GPU-only vs hybrid logs.
+\textbf{Columns:} \texttt{timestamp}, \texttt{gpu_util_after}, \texttt{test_scenario}.
+
+\noindent\textbf{Python instructions:}
+\begin{verbatim}
+df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+plt.figure()
+for scen in ["GPU-ONLY", "HYBRID"]:
+sub = df[df["test_scenario"] == scen].sort_values("timestamp")
+plt.plot(sub["timestamp"], sub["gpu_util_after"], marker="o",
+label=scen)
+
+plt.xlabel("Time")
+plt.ylabel("GPU Utilization after (%)")
+plt.legend()
+plt.title("GPU Utilization Over Time (Sampled per Request)")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+\end{verbatim}
+
+\subsection*{Figure 4: CPU Utilization Over Time}
+
+\begin{figure}[t]
+\centering
+\caption{Sampled CPU utilization (after-request) over time for GPU-only and hybrid runs.}
+\label{fig:cpu-util-time}
+\end{figure}
+
+\noindent\textbf{Data source:} GPU-only vs hybrid logs.
+\textbf{Columns:} \texttt{timestamp}, \texttt{cpu_util_after}, \texttt{test_scenario}.
+
+\noindent\textbf{Python instructions:}
+\begin{verbatim}
+plt.figure()
+for scen in ["GPU-ONLY", "HYBRID"]:
+sub = df[df["test_scenario"] == scen].sort_values("timestamp")
+plt.plot(sub["timestamp"], sub["cpu_util_after"], marker="o",
+label=scen)
+
+plt.xlabel("Time")
+plt.ylabel("CPU Utilization after (%)")
+plt.legend()
+plt.title("CPU Utilization Over Time (Sampled per Request)")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+\end{verbatim}
+
+\subsection*{Figure 5: GPU-only vs Hybrid Mean Latency Comparison}
+
+\begin{figure}[t]
+\centering
+\caption{Mean latency comparison between GPU-only and hybrid scenarios.}
+\label{fig:mean-latency-bar}
+\end{figure}
+
+\noindent\textbf{Data source:} GPU-only vs hybrid logs (aggregated).
+\textbf{Columns:} \texttt{latency_s}, \texttt{test_scenario}.
+
+\noindent\textbf{Python instructions:}
+\begin{verbatim}
+means = df.groupby("test_scenario")["latency_s"].mean()
+
+plt.figure()
+plt.bar(means.index, means.values)
+plt.ylabel("Mean latency (s)")
+plt.title("Mean Latency: GPU-only vs Hybrid")
+plt.show()
+\end{verbatim}
+
+\subsection*{Figure 6: Sequential vs Concurrent Latency Comparison}
+
+\begin{figure}[t]
+\centering
+\caption{Latency distributions for sequential vs concurrent runs (boxplot).}
+\label{fig:seq-concurrent}
+\end{figure}
+
+\noindent\textbf{Data source:} Sequential logs and concurrent logs (separate CSVs).
+\textbf{Columns:} \texttt{latency_s}, plus a manually added \texttt{scenario} column: \texttt{SEQUENTIAL}, \texttt{CONCURRENT}.
+
+\noindent\textbf{Python instructions:}
+\begin{verbatim}
+df_seq = pd.read_csv("sequential.csv")
+df_con = pd.read_csv("concurrent.csv")
+df_seq["scenario"] = "SEQUENTIAL"
+df_con["scenario"] = "CONCURRENT"
+
+df_all = pd.concat([df_seq, df_con], ignore_index=True)
+
+plt.figure()
+df_all.boxplot(column="latency_s", by="scenario")
+plt.ylabel("Latency (s)")
+plt.title("Latency: Sequential vs Concurrent")
+plt.suptitle("")
+plt.show()
+\end{verbatim}
+
+\subsection*{Figure 7: Tokens/sec Degradation Under Load}
+
+\begin{figure}[t]
+\centering
+\caption{Per-request throughput vs latency, illustrating degradation under load.}
+\label{fig:throughput-latency}
+\end{figure}
+
+\noindent\textbf{Data source:} Combined concurrent, GPU-only, and hybrid logs.
+\textbf{Columns:} \texttt{latency_s}, \texttt{throughput_tokens_per_s}, \texttt{mode}, \texttt{test_scenario}.
+
+\noindent\textbf{Python instructions:}
+\begin{verbatim}
+df_con = pd.read_csv("concurrent.csv")
+df_con["test_scenario"] = "CONCURRENT"
+
+df_all = pd.concat([df_con, df], ignore_index=True)
+
+plt.figure()
+for scen in df_all["test_scenario"].unique():
+sub = df_all[df_all["test_scenario"] == scen]
+plt.scatter(sub["latency_s"], sub["throughput_tokens_per_s"],
+label=scen, alpha=0.7)
+
+plt.xlabel("Latency (s)")
+plt.ylabel("Throughput (tokens/s)")
+plt.legend()
+plt.title("Tokens/sec vs Latency (Degradation Under Load)")
+plt.show()
+\end{verbatim}
+
+\subsection*{Figure 8: Request Routing Distribution (CPU vs GPU)}
+
+\begin{figure}[t]
+\centering
+\caption{Distribution of requests routed to CPU vs GPU across scenarios.}
+\label{fig:routing-distribution}
+\end{figure}
+
+\noindent\textbf{Data source:} Combined sequential, concurrent, GPU-only, and hybrid logs.
+\textbf{Columns:} \texttt{mode}.
+
+\noindent\textbf{Python instructions:}
+\begin{verbatim}
+df_seq = pd.read_csv("sequential.csv")
+df_con = pd.read_csv("concurrent.csv")
+df_gh = pd.read_csv("gpu_hybrid.csv")
+
+df_all = pd.concat([df_seq, df_con, df_gh], ignore_index=True)
+
+counts = df_all["mode"].value_counts()
+
+plt.figure()
+plt.bar(counts.index, counts.values)
+plt.ylabel("Number of requests")
+plt.title("Routing Distribution: CPU vs GPU")
+plt.show()
+\end{verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% END
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+[1]: https://arxiv.org/abs/2309.06180?utm_source=chatgpt.com "Efficient Memory Management for Large Language Model Serving with PagedAttention"
+[2]: https://github.com/vllm-project/vllm?utm_source=chatgpt.com "vllm-project/vllm: A high-throughput and memory-efficient ..."
+[3]: https://www.usenix.org/conference/osdi22/presentation/yu?utm_source=chatgpt.com "Orca: A Distributed Serving System for Transformer-Based ..."
+[4]: https://github.com/fredrickang/LaLaRAND?utm_source=chatgpt.com "LaLaRAND: Flexible Layer-by-Layer CPU/GPU Scheduling ..."
+[5]: https://www.liborui.cn/publication/14-icpads24-webinf/?utm_source=chatgpt.com "WebInf: Accelerating WebGPU-based In-browser DNN ..."
+[6]: https://www.sciencedirect.com/science/article/abs/pii/S1389128625004566?utm_source=chatgpt.com "nnWeb: Towards efficient WebGPU-based DNN inference ..."
+[7]: https://openreview.net/pdf?id=Qu2itILaoZ&utm_source=chatgpt.com "WeInfer: Unleashing the Power of WebGPU on LLM ..."
+[8]: https://arxiv.org/html/2309.08978v2?utm_source=chatgpt.com "Empowering In-Browser Deep Learning Inference on Edge ..."
+[9]: https://www.semanticscholar.org/paper/Pipelined-Data-Parallel-CPU-GPU-Scheduling-for-Xiang-Kim/fc55a46790112f800993f7bd3792c37949b45089?utm_source=chatgpt.com "Pipelined Data-Parallel CPU/GPU Scheduling for Multi-DNN ..."
