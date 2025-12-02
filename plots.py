@@ -5,475 +5,461 @@ import numpy as np
 from scipy import stats
 
 # Set style
-sns.set_theme(style="whitegrid", palette="husl")
-plt.rcParams['figure.figsize'] = (12, 8)
-plt.rcParams['font.size'] = 11
+sns.set_style("whitegrid")
+sns.set_palette("husl")
 
-# Load datasets
-sequential = pd.read_csv('sequential.csv')
+# Load all CSV files
 concurrent = pd.read_csv('concurrent.csv')
 gpu_only = pd.read_csv('gpu_only.csv')
 hybrid = pd.read_csv('hybrid.csv')
+sequential = pd.read_csv('sequential.csv')
 
-# ==============================================================================
-# 1. Sequential Latency vs Prompt Length
-# ==============================================================================
-def plot_sequential_latency_vs_prompt():
-    fig, ax = plt.subplots(figsize=(10, 6))
+# Parse timestamps
+for df in [concurrent, gpu_only, hybrid, sequential]:
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+# ============================================================================
+# PLOT 1: Latency vs Prompt Size (CPU vs GPU)
+# ============================================================================
+def plot_latency_vs_prompt_size():
+    fig, ax = plt.subplots(figsize=(12, 7))
     
-    # Separate by mode
-    cpu_data = sequential[sequential['mode'] == 'cpu']
-    gpu_data = sequential[sequential['mode'] == 'gpu']
+    # Filter data for CPU and GPU
+    cpu_data = concurrent[concurrent['mode'] == 'cpu']
+    gpu_data = concurrent[concurrent['mode'] == 'gpu']
     
-    sns.scatterplot(data=cpu_data, x='prompt_length', y='latency_s', 
-                    label='CPU (phi3)', s=100, alpha=0.7, ax=ax)
-    sns.scatterplot(data=gpu_data, x='prompt_length', y='latency_s', 
-                    label='GPU (gemma2:2b)', s=100, alpha=0.7, ax=ax)
+    # Scatter plots
+    ax.scatter(cpu_data['prompt_length'], cpu_data['latency_s'], 
+               alpha=0.6, s=100, label='CPU (Phi-3)', marker='o')
+    ax.scatter(gpu_data['prompt_length'], gpu_data['latency_s'], 
+               alpha=0.6, s=100, label='GPU (Gemma-2)', marker='s')
     
     # Add trend lines
     if len(cpu_data) > 1:
-        z_cpu = np.polyfit(cpu_data['prompt_length'], cpu_data['latency_s'], 1)
+        z_cpu = np.polyfit(cpu_data['prompt_length'], cpu_data['latency_s'], 2)
         p_cpu = np.poly1d(z_cpu)
-        x_cpu = np.linspace(cpu_data['prompt_length'].min(), cpu_data['prompt_length'].max(), 100)
+        x_cpu = np.linspace(cpu_data['prompt_length'].min(), 
+                           cpu_data['prompt_length'].max(), 100)
         ax.plot(x_cpu, p_cpu(x_cpu), '--', alpha=0.5, linewidth=2)
     
     if len(gpu_data) > 1:
-        z_gpu = np.polyfit(gpu_data['prompt_length'], gpu_data['latency_s'], 1)
+        z_gpu = np.polyfit(gpu_data['prompt_length'], gpu_data['latency_s'], 2)
         p_gpu = np.poly1d(z_gpu)
-        x_gpu = np.linspace(gpu_data['prompt_length'].min(), gpu_data['prompt_length'].max(), 100)
+        x_gpu = np.linspace(gpu_data['prompt_length'].min(), 
+                           gpu_data['prompt_length'].max(), 100)
         ax.plot(x_gpu, p_gpu(x_gpu), '--', alpha=0.5, linewidth=2)
     
-    ax.set_xlabel('Prompt Length (tokens)')
-    ax.set_ylabel('Latency (seconds)')
-    ax.set_title('Sequential Processing: Latency vs Prompt Length')
-    ax.legend()
-    plt.tight_layout()
-    return fig
-
-# ==============================================================================
-# 2. Sequential Throughput vs Prompt Length
-# ==============================================================================
-def plot_sequential_throughput_vs_prompt():
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    cpu_data = sequential[sequential['mode'] == 'cpu']
-    gpu_data = sequential[sequential['mode'] == 'gpu']
-    
-    sns.scatterplot(data=cpu_data, x='prompt_length', y='throughput_tokens_per_s',
-                    label='CPU (phi3)', s=100, alpha=0.7, ax=ax)
-    sns.scatterplot(data=gpu_data, x='prompt_length', y='throughput_tokens_per_s',
-                    label='GPU (gemma2:2b)', s=100, alpha=0.7, ax=ax)
-    
-    ax.set_xlabel('Prompt Length (tokens)')
-    ax.set_ylabel('Throughput (tokens/second)')
-    ax.set_title('Sequential Processing: Throughput vs Prompt Length')
-    ax.legend()
-    plt.tight_layout()
-    return fig
-
-# ==============================================================================
-# 3. Latency Under Concurrent Load (GPU Saturation Curve)
-# ==============================================================================
-def plot_gpu_saturation_curve():
-    fig, ax = plt.subplots(figsize=(12, 7))
-    
-    # Extract queue depth from decision_reason
-    concurrent['queue_depth'] = concurrent['decision_reason'].str.extract(r'Queue depth: (\d+)').astype(float)
-    
-    # Focus on GPU requests
-    gpu_concurrent = concurrent[concurrent['mode'] == 'gpu'].copy()
-    
-    # Group by queue depth and calculate stats
-    queue_stats = gpu_concurrent.groupby('queue_depth').agg({
-        'latency_s': ['mean', 'std', 'count']
-    }).reset_index()
-    queue_stats.columns = ['queue_depth', 'mean_latency', 'std_latency', 'count']
-    
-    # Plot with error bars
-    ax.errorbar(queue_stats['queue_depth'], queue_stats['mean_latency'],
-                yerr=queue_stats['std_latency'], marker='o', markersize=8,
-                capsize=5, capthick=2, linewidth=2, label='GPU (gemma2:2b)')
-    
-    # Add individual points
-    sns.scatterplot(data=gpu_concurrent, x='queue_depth', y='latency_s',
-                    alpha=0.3, s=50, ax=ax, legend=False)
-    
-    ax.set_xlabel('Queue Depth (Concurrent Requests)')
-    ax.set_ylabel('Latency (seconds)')
-    ax.set_title('GPU Saturation Curve: Latency vs Concurrent Load')
-    ax.legend()
+    ax.set_xlabel('Prompt Length (tokens)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Latency (seconds)', fontsize=12, fontweight='bold')
+    ax.set_title('Latency Scaling: CPU vs GPU by Prompt Size', 
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    return fig
+    plt.savefig('plot1_latency_vs_prompt_size.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# 4. Throughput Collapse at High Load
-# ==============================================================================
-def plot_throughput_collapse():
+# ============================================================================
+# PLOT 2: Throughput vs Prompt Size (CPU vs GPU)
+# ============================================================================
+def plot_throughput_vs_prompt_size():
     fig, ax = plt.subplots(figsize=(12, 7))
     
-    concurrent['queue_depth'] = concurrent['decision_reason'].str.extract(r'Queue depth: (\d+)').astype(float)
+    cpu_data = concurrent[concurrent['mode'] == 'cpu']
+    gpu_data = concurrent[concurrent['mode'] == 'gpu']
     
-    # Separate CPU and GPU
-    cpu_concurrent = concurrent[concurrent['mode'] == 'cpu'].copy()
-    gpu_concurrent = concurrent[concurrent['mode'] == 'gpu'].copy()
+    # Group by prompt length and calculate mean throughput
+    cpu_grouped = cpu_data.groupby('prompt_length')['throughput_tokens_per_s'].mean()
+    gpu_grouped = gpu_data.groupby('prompt_length')['throughput_tokens_per_s'].mean()
     
-    # Calculate stats
-    cpu_stats = cpu_concurrent.groupby('queue_depth')['throughput_tokens_per_s'].agg(['mean', 'std']).reset_index()
-    gpu_stats = gpu_concurrent.groupby('queue_depth')['throughput_tokens_per_s'].agg(['mean', 'std']).reset_index()
+    ax.plot(cpu_grouped.index, cpu_grouped.values, 
+            marker='o', linewidth=2.5, markersize=8, label='CPU (Phi-3)')
+    ax.plot(gpu_grouped.index, gpu_grouped.values, 
+            marker='s', linewidth=2.5, markersize=8, label='GPU (Gemma-2)')
     
-    # Plot
-    ax.plot(cpu_stats['queue_depth'], cpu_stats['mean'], marker='o', linewidth=2,
-            markersize=8, label='CPU (phi3)')
-    ax.fill_between(cpu_stats['queue_depth'], 
-                     cpu_stats['mean'] - cpu_stats['std'],
-                     cpu_stats['mean'] + cpu_stats['std'], alpha=0.2)
-    
-    ax.plot(gpu_stats['queue_depth'], gpu_stats['mean'], marker='s', linewidth=2,
-            markersize=8, label='GPU (gemma2:2b)')
-    ax.fill_between(gpu_stats['queue_depth'],
-                     gpu_stats['mean'] - gpu_stats['std'],
-                     gpu_stats['mean'] + gpu_stats['std'], alpha=0.2)
-    
-    ax.set_xlabel('Queue Depth (Concurrent Requests)')
-    ax.set_ylabel('Throughput (tokens/second)')
-    ax.set_title('Throughput Collapse Under High Concurrent Load')
-    ax.legend()
+    ax.set_xlabel('Prompt Length (tokens)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Throughput (tokens/sec)', fontsize=12, fontweight='bold')
+    ax.set_title('Throughput Comparison: CPU vs GPU Across Prompt Sizes', 
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    return fig
+    plt.savefig('plot2_throughput_vs_prompt_size.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# 5. Latency Distribution (GPU-only vs Hybrid)
-# ==============================================================================
+# ============================================================================
+# PLOT 3: Latency Distribution Histograms (GPU-only vs Hybrid)
+# ============================================================================
 def plot_latency_distribution():
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(12, 7))
     
-    # GPU-only distribution
-    sns.histplot(data=gpu_only, x='latency_s', kde=True, bins=20, ax=axes[0])
-    axes[0].axvline(gpu_only['latency_s'].median(), color='red', linestyle='--',
-                    linewidth=2, label=f'Median: {gpu_only["latency_s"].median():.2f}s')
-    axes[0].set_xlabel('Latency (seconds)')
-    axes[0].set_ylabel('Frequency')
-    axes[0].set_title('GPU-Only Mode: Latency Distribution')
-    axes[0].legend()
+    ax.hist(gpu_only['latency_s'], bins=30, alpha=0.6, 
+            label='GPU-only Mode', edgecolor='black')
+    ax.hist(hybrid['latency_s'], bins=30, alpha=0.6, 
+            label='Hybrid Mode', edgecolor='black')
     
-    # Hybrid distribution
-    hybrid_cpu = hybrid[hybrid['mode'] == 'cpu']
-    hybrid_gpu = hybrid[hybrid['mode'] == 'gpu']
-    
-    sns.histplot(data=hybrid_cpu, x='latency_s', kde=True, bins=15,
-                 alpha=0.5, label='CPU', ax=axes[1])
-    sns.histplot(data=hybrid_gpu, x='latency_s', kde=True, bins=15,
-                 alpha=0.5, label='GPU', ax=axes[1])
-    axes[1].set_xlabel('Latency (seconds)')
-    axes[1].set_ylabel('Frequency')
-    axes[1].set_title('Hybrid Mode: Latency Distribution by Backend')
-    axes[1].legend()
-    
+    ax.set_xlabel('Latency (seconds)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Frequency', fontsize=12, fontweight='bold')
+    ax.set_title('Latency Distribution: GPU-only vs Hybrid Mode', 
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
-    return fig
+    plt.savefig('plot3_latency_distribution.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# 6. ECDF of Latency
-# ==============================================================================
-def plot_latency_ecdf():
-    fig, ax = plt.subplots(figsize=(10, 6))
+# ============================================================================
+# PLOT 4: ECDF with Percentiles (GPU-only vs Hybrid)
+# ============================================================================
+def plot_ecdf_percentiles():
+    fig, ax = plt.subplots(figsize=(12, 7))
     
-    # Create ECDF for each mode
-    datasets = [
-        (sequential, 'Sequential'),
-        (gpu_only, 'GPU-Only'),
-        (hybrid, 'Hybrid')
-    ]
+    # Calculate ECDF
+    gpu_sorted = np.sort(gpu_only['latency_s'])
+    hybrid_sorted = np.sort(hybrid['latency_s'])
     
-    for data, label in datasets:
-        latencies = np.sort(data['latency_s'])
-        ecdf = np.arange(1, len(latencies) + 1) / len(latencies)
-        ax.plot(latencies, ecdf, marker='.', linestyle='none',
-                markersize=4, alpha=0.7, label=label)
+    gpu_ecdf = np.arange(1, len(gpu_sorted) + 1) / len(gpu_sorted)
+    hybrid_ecdf = np.arange(1, len(hybrid_sorted) + 1) / len(hybrid_sorted)
+    
+    ax.plot(gpu_sorted, gpu_ecdf, linewidth=2.5, label='GPU-only Mode')
+    ax.plot(hybrid_sorted, hybrid_ecdf, linewidth=2.5, label='Hybrid Mode')
     
     # Add percentile lines
     percentiles = [50, 95, 99]
-    colors = ['gray', 'orange', 'red']
-    for p, c in zip(percentiles, colors):
-        ax.axhline(p/100, color=c, linestyle='--', alpha=0.5,
-                   linewidth=1, label=f'P{p}')
+    for p in percentiles:
+        gpu_p = np.percentile(gpu_only['latency_s'], p)
+        hybrid_p = np.percentile(hybrid['latency_s'], p)
+        ax.axhline(y=p/100, color='gray', linestyle='--', alpha=0.5)
+        ax.text(ax.get_xlim()[1] * 0.95, p/100, f'P{p}', 
+                verticalalignment='bottom', fontsize=10)
     
-    ax.set_xlabel('Latency (seconds)')
-    ax.set_ylabel('Cumulative Probability')
-    ax.set_title('Empirical Cumulative Distribution Function (ECDF) of Latency')
-    ax.legend()
+    ax.set_xlabel('Latency (seconds)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Cumulative Probability', fontsize=12, fontweight='bold')
+    ax.set_title('ECDF: Latency Percentiles (P50, P95, P99)', 
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    return fig
+    plt.savefig('plot4_ecdf_percentiles.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# 7. Throughput Comparison
-# ==============================================================================
+# ============================================================================
+# PLOT 5: Mean and Median Throughput Comparison (Bar Chart)
+# ============================================================================
 def plot_throughput_comparison():
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(10, 7))
     
-    # Prepare data
-    comparison_data = pd.DataFrame({
-        'Mode': ['Sequential', 'GPU-Only', 'Hybrid'],
-        'Mean': [
-            sequential['throughput_tokens_per_s'].mean(),
-            gpu_only['throughput_tokens_per_s'].mean(),
-            hybrid['throughput_tokens_per_s'].mean()
-        ],
-        'Median': [
-            sequential['throughput_tokens_per_s'].median(),
-            gpu_only['throughput_tokens_per_s'].median(),
-            hybrid['throughput_tokens_per_s'].median()
-        ],
-        'Std': [
-            sequential['throughput_tokens_per_s'].std(),
-            gpu_only['throughput_tokens_per_s'].std(),
-            hybrid['throughput_tokens_per_s'].std()
-        ]
-    })
+    metrics = {
+        'GPU-only': {
+            'mean': gpu_only['throughput_tokens_per_s'].mean(),
+            'median': gpu_only['throughput_tokens_per_s'].median()
+        },
+        'Hybrid': {
+            'mean': hybrid['throughput_tokens_per_s'].mean(),
+            'median': hybrid['throughput_tokens_per_s'].median()
+        }
+    }
     
-    x = np.arange(len(comparison_data))
+    x = np.arange(len(metrics))
     width = 0.35
     
-    bars1 = ax.bar(x - width/2, comparison_data['Mean'], width,
-                   label='Mean', yerr=comparison_data['Std'], capsize=5)
-    bars2 = ax.bar(x + width/2, comparison_data['Median'], width,
-                   label='Median')
+    means = [metrics[m]['mean'] for m in metrics]
+    medians = [metrics[m]['median'] for m in metrics]
     
-    ax.set_xlabel('Execution Mode')
-    ax.set_ylabel('Throughput (tokens/second)')
-    ax.set_title('Throughput Comparison Across Execution Modes')
+    ax.bar(x - width/2, means, width, label='Mean', alpha=0.8)
+    ax.bar(x + width/2, medians, width, label='Median', alpha=0.8)
+    
+    ax.set_ylabel('Throughput (tokens/sec)', fontsize=12, fontweight='bold')
+    ax.set_title('Throughput Comparison: GPU-only vs Hybrid Mode', 
+                 fontsize=14, fontweight='bold')
     ax.set_xticks(x)
-    ax.set_xticklabels(comparison_data['Mode'])
-    ax.legend()
+    ax.set_xticklabels(metrics.keys())
+    ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3, axis='y')
     
     # Add value labels on bars
-    for bars in [bars1, bars2]:
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{height:.1f}', ha='center', va='bottom', fontsize=9)
+    for i, (m, med) in enumerate(zip(means, medians)):
+        ax.text(i - width/2, m, f'{m:.1f}', ha='center', va='bottom', fontsize=10)
+        ax.text(i + width/2, med, f'{med:.1f}', ha='center', va='bottom', fontsize=10)
     
     plt.tight_layout()
-    return fig
+    plt.savefig('plot5_throughput_comparison.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# 8. Request Routing Breakdown (CPU vs GPU)
-# ==============================================================================
-def plot_routing_breakdown():
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+# ============================================================================
+# PLOT 6: Request Distribution Pie Charts (CPU vs GPU in Hybrid)
+# ============================================================================
+def plot_request_distribution():
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     
-    datasets = [
-        (sequential, 'Sequential', axes[0]),
-        (gpu_only, 'GPU-Only', axes[1]),
-        (hybrid, 'Hybrid', axes[2])
-    ]
+    # Hybrid mode distribution
+    hybrid_counts = hybrid['mode'].value_counts()
+    colors = sns.color_palette('husl', len(hybrid_counts))
     
-    for data, title, ax in datasets:
-        mode_counts = data['mode'].value_counts()
-        colors = ['#ff9999', '#66b3ff']
-        ax.pie(mode_counts.values, labels=mode_counts.index,
-               autopct='%1.1f%%', startangle=90, colors=colors)
-        ax.set_title(f'{title}\n({len(data)} total requests)')
+    ax1.pie(hybrid_counts.values, labels=hybrid_counts.index, autopct='%1.1f%%',
+            startangle=90, colors=colors, textprops={'fontsize': 11})
+    ax1.set_title('Hybrid Mode: Request Distribution', 
+                  fontsize=13, fontweight='bold')
     
-    plt.suptitle('Request Routing Breakdown: CPU vs GPU', fontsize=14, y=1.02)
+    # Overall concurrent distribution
+    concurrent_counts = concurrent['mode'].value_counts()
+    ax2.pie(concurrent_counts.values, labels=concurrent_counts.index, autopct='%1.1f%%',
+            startangle=90, colors=colors, textprops={'fontsize': 11})
+    ax2.set_title('Concurrent Mode: Request Distribution', 
+                  fontsize=13, fontweight='bold')
+    
     plt.tight_layout()
-    return fig
+    plt.savefig('plot6_request_distribution.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# 9. CPU Utilization Before/After Requests
-# ==============================================================================
+# ============================================================================
+# PLOT 7: CPU Utilization Changes (Scatter Plot)
+# ============================================================================
 def plot_cpu_utilization():
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(12, 7))
     
-    datasets = [
-        (sequential, 'Sequential', axes[0, 0]),
-        (concurrent, 'Concurrent', axes[0, 1]),
-        (gpu_only, 'GPU-Only', axes[1, 0]),
-        (hybrid, 'Hybrid', axes[1, 1])
-    ]
+    ax.scatter(hybrid.index, hybrid['cpu_util_delta'], 
+               alpha=0.6, s=100, c=hybrid['mode'].map({'cpu': 'blue', 'gpu': 'red'}),
+               label='Hybrid Mode')
     
-    for data, title, ax in datasets:
-        ax.scatter(data['cpu_util_before'], data['cpu_util_after'],
-                  alpha=0.6, s=50)
-        
-        # Add diagonal line
-        max_val = max(data['cpu_util_before'].max(), data['cpu_util_after'].max())
-        ax.plot([0, max_val], [0, max_val], 'r--', alpha=0.5, linewidth=2)
-        
-        ax.set_xlabel('CPU Utilization Before (%)')
-        ax.set_ylabel('CPU Utilization After (%)')
-        ax.set_title(f'{title} Mode')
-        ax.grid(True, alpha=0.3)
-        
-        # Add statistics
-        mean_delta = data['cpu_util_delta'].mean()
-        ax.text(0.05, 0.95, f'Mean Δ: {mean_delta:.1f}%',
-               transform=ax.transAxes, verticalalignment='top',
-               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=1, alpha=0.3)
+    ax.set_xlabel('Request Index', fontsize=12, fontweight='bold')
+    ax.set_ylabel('CPU Utilization Delta (%)', fontsize=12, fontweight='bold')
+    ax.set_title('CPU Load Changes in Hybrid Mode', 
+                 fontsize=14, fontweight='bold')
+    ax.grid(True, alpha=0.3)
     
-    plt.suptitle('CPU Utilization: Before vs After Request Processing', fontsize=14)
+    # Create custom legend
+    from matplotlib.patches import Patch
+    legend_elements = [Patch(facecolor='blue', label='CPU'),
+                      Patch(facecolor='red', label='GPU')]
+    ax.legend(handles=legend_elements, fontsize=11)
+    
     plt.tight_layout()
-    return fig
+    plt.savefig('plot7_cpu_utilization.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# 10. GPU Utilization Before/After Requests
-# ==============================================================================
+# ============================================================================
+# PLOT 8: GPU Utilization Changes (Scatter Plot)
+# ============================================================================
 def plot_gpu_utilization():
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(12, 7))
     
-    datasets = [
-        (sequential, 'Sequential', axes[0, 0]),
-        (concurrent, 'Concurrent', axes[0, 1]),
-        (gpu_only, 'GPU-Only', axes[1, 0]),
-        (hybrid, 'Hybrid', axes[1, 1])
-    ]
+    # Combine relevant datasets
+    all_data = pd.concat([gpu_only, hybrid])
     
-    for data, title, ax in datasets:
-        scatter = ax.scatter(data['gpu_util_before'], data['gpu_util_after'],
-                            c=data['latency_s'], cmap='viridis',
-                            alpha=0.6, s=50)
-        
-        # Add diagonal line
-        max_val = max(data['gpu_util_before'].max(), data['gpu_util_after'].max())
-        ax.plot([0, max_val], [0, max_val], 'r--', alpha=0.5, linewidth=2)
-        
-        ax.set_xlabel('GPU Utilization Before (%)')
-        ax.set_ylabel('GPU Utilization After (%)')
-        ax.set_title(f'{title} Mode')
-        ax.grid(True, alpha=0.3)
-        
-        # Add colorbar
-        plt.colorbar(scatter, ax=ax, label='Latency (s)')
-        
-        # Add statistics
-        mean_delta = data['gpu_util_delta'].mean()
-        ax.text(0.05, 0.95, f'Mean Δ: {mean_delta:.1f}%',
-               transform=ax.transAxes, verticalalignment='top',
-               bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+    ax.scatter(range(len(all_data)), all_data['gpu_util_delta'], 
+               alpha=0.6, s=100, 
+               c=['red' if 'gpu_only' in str(i) else 'blue' 
+                  for i in range(len(all_data))])
     
-    plt.suptitle('GPU Utilization: Before vs After Request Processing', fontsize=14)
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=1, alpha=0.3)
+    ax.set_xlabel('Request Index', fontsize=12, fontweight='bold')
+    ax.set_ylabel('GPU Utilization Delta (%)', fontsize=12, fontweight='bold')
+    ax.set_title('GPU Load Changes: GPU-only vs Hybrid Mode', 
+                 fontsize=14, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    from matplotlib.patches import Patch
+    legend_elements = [Patch(facecolor='red', label='GPU-only'),
+                      Patch(facecolor='blue', label='Hybrid')]
+    ax.legend(handles=legend_elements, fontsize=11)
+    
     plt.tight_layout()
-    return fig
+    plt.savefig('plot8_gpu_utilization.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# BONUS PLOTS
-# ==============================================================================
-
-# 11. Memory Utilization Trends
-def plot_memory_utilization():
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+# ============================================================================
+# PLOT 9: Memory Footprint Over Time
+# ============================================================================
+def plot_memory_footprint():
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
     
     # CPU Memory
-    for i, (data, title) in enumerate([(gpu_only, 'GPU-Only'), (hybrid, 'Hybrid')]):
-        ax = axes[0, i]
-        ax.plot(data.index, data['cpu_mem_before_gb'], label='Before', alpha=0.7)
-        ax.plot(data.index, data['cpu_mem_after_gb'], label='After', alpha=0.7)
-        ax.fill_between(data.index, data['cpu_mem_before_gb'],
-                        data['cpu_mem_after_gb'], alpha=0.2)
-        ax.set_xlabel('Request Index')
-        ax.set_ylabel('CPU Memory (GB)')
-        ax.set_title(f'{title}: CPU Memory Usage')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+    time_offset = (hybrid['timestamp'] - hybrid['timestamp'].min()).dt.total_seconds()
+    ax1.plot(time_offset, hybrid['cpu_mem_before_gb'], 
+             label='Before Request', linewidth=2, marker='o', markersize=4)
+    ax1.plot(time_offset, hybrid['cpu_mem_after_gb'], 
+             label='After Request', linewidth=2, marker='s', markersize=4)
+    ax1.set_xlabel('Time (seconds)', fontsize=12, fontweight='bold')
+    ax1.set_ylabel('CPU Memory (GB)', fontsize=12, fontweight='bold')
+    ax1.set_title('CPU Memory Footprint Over Time (Hybrid Mode)', 
+                  fontsize=13, fontweight='bold')
+    ax1.legend(fontsize=10)
+    ax1.grid(True, alpha=0.3)
     
     # GPU Memory
-    for i, (data, title) in enumerate([(gpu_only, 'GPU-Only'), (hybrid, 'Hybrid')]):
-        ax = axes[1, i]
-        ax.plot(data.index, data['gpu_mem_util_before_pct'], label='Before', alpha=0.7)
-        ax.plot(data.index, data['gpu_mem_util_after_pct'], label='After', alpha=0.7)
-        ax.fill_between(data.index, data['gpu_mem_util_before_pct'],
-                        data['gpu_mem_util_after_pct'], alpha=0.2)
-        ax.set_xlabel('Request Index')
-        ax.set_ylabel('GPU Memory Utilization (%)')
-        ax.set_title(f'{title}: GPU Memory Utilization')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+    ax2.plot(time_offset, hybrid['gpu_mem_before_gb'], 
+             label='Before Request', linewidth=2, marker='o', markersize=4)
+    ax2.plot(time_offset, hybrid['gpu_mem_after_gb'], 
+             label='After Request', linewidth=2, marker='s', markersize=4)
+    ax2.set_xlabel('Time (seconds)', fontsize=12, fontweight='bold')
+    ax2.set_ylabel('GPU Memory (GB)', fontsize=12, fontweight='bold')
+    ax2.set_title('GPU Memory Footprint Over Time (Hybrid Mode)', 
+                  fontsize=13, fontweight='bold')
+    ax2.legend(fontsize=10)
+    ax2.grid(True, alpha=0.3)
     
-    plt.suptitle('Memory Utilization Over Time', fontsize=14)
     plt.tight_layout()
-    return fig
+    plt.savefig('plot9_memory_footprint.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# 12. Latency Heatmap by Queue Depth and Prompt Length
-def plot_latency_heatmap():
-    concurrent['queue_depth'] = concurrent['decision_reason'].str.extract(r'Queue depth: (\d+)').astype(float)
+# ============================================================================
+# PLOT 10: Latency vs Queue Depth
+# ============================================================================
+def plot_latency_vs_queue_depth():
+    fig, ax = plt.subplots(figsize=(12, 7))
     
-    # Create bins for prompt length
-    concurrent['prompt_bin'] = pd.cut(concurrent['prompt_length'],
-                                      bins=[0, 5, 15, 50, 150],
-                                      labels=['Tiny (0-5)', 'Small (5-15)', 'Medium (15-50)', 'Large (50+)'])
+    # Extract queue depth from decision_reason
+    def extract_queue_depth(reason):
+        import re
+        match = re.search(r'Queue depth: (\d+)', str(reason))
+        return int(match.group(1)) if match else None
     
-    pivot_data = concurrent.pivot_table(values='latency_s',
-                                        index='queue_depth',
-                                        columns='prompt_bin',
-                                        aggfunc='mean')
+    concurrent['queue_depth'] = concurrent['decision_reason'].apply(extract_queue_depth)
+    gpu_only['queue_depth'] = gpu_only['decision_reason'].apply(extract_queue_depth)
+    hybrid['queue_depth'] = hybrid['decision_reason'].apply(extract_queue_depth)
     
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(pivot_data, annot=True, fmt='.1f', cmap='YlOrRd',
-                cbar_kws={'label': 'Mean Latency (s)'}, ax=ax)
-    ax.set_xlabel('Prompt Size Category')
-    ax.set_ylabel('Queue Depth')
-    ax.set_title('Latency Heatmap: Queue Depth vs Prompt Size')
+    # Plot for different modes
+    for df, label in [(gpu_only, 'GPU-only'), (hybrid, 'Hybrid')]:
+        data = df.dropna(subset=['queue_depth'])
+        grouped = data.groupby('queue_depth')['latency_s'].mean()
+        ax.plot(grouped.index, grouped.values, marker='o', 
+                linewidth=2.5, markersize=8, label=label)
+    
+    ax.set_xlabel('Queue Depth', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Mean Latency (seconds)', fontsize=12, fontweight='bold')
+    ax.set_title('Latency Degradation by Queue Depth', 
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    return fig
+    plt.savefig('plot10_latency_vs_queue_depth.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# 13. Output Tokens vs Latency Scatter
+# ============================================================================
+# PLOT 11: Throughput vs Queue Depth (Concurrency)
+# ============================================================================
+def plot_throughput_vs_queue_depth():
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    for df, label in [(gpu_only, 'GPU-only'), (hybrid, 'Hybrid'), 
+                      (concurrent, 'Concurrent')]:
+        data = df.dropna(subset=['queue_depth'])
+        grouped = data.groupby('queue_depth')['throughput_tokens_per_s'].mean()
+        ax.plot(grouped.index, grouped.values, marker='o', 
+                linewidth=2.5, markersize=8, label=label)
+    
+    ax.set_xlabel('Queue Depth (Concurrency)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Mean Throughput (tokens/sec)', fontsize=12, fontweight='bold')
+    ax.set_title('Throughput Degradation with Increasing Concurrency', 
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('plot11_throughput_vs_queue_depth.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+# ============================================================================
+# PLOT 12: Queue Depth vs Prompt Size Heatmap (Latency)
+# ============================================================================
+def plot_heatmap_queue_prompt():
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    # Use concurrent data for comprehensive view
+    data = concurrent.dropna(subset=['queue_depth'])
+    
+    # Create pivot table
+    pivot = data.pivot_table(values='latency_s', 
+                             index='queue_depth', 
+                             columns='prompt_length', 
+                             aggfunc='mean')
+    
+    sns.heatmap(pivot, annot=True, fmt='.1f', cmap='YlOrRd', 
+                ax=ax, cbar_kws={'label': 'Latency (seconds)'})
+    
+    ax.set_xlabel('Prompt Length (tokens)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Queue Depth', fontsize=12, fontweight='bold')
+    ax.set_title('Latency Heatmap: Queue Depth × Prompt Size Interaction', 
+                 fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig('plot12_heatmap_queue_prompt.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+# ============================================================================
+# PLOT 13: Output Tokens vs Latency (Generation Cost)
+# ============================================================================
 def plot_output_tokens_vs_latency():
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig, ax = plt.subplots(figsize=(12, 7))
     
-    datasets = [
-        (sequential, 'Sequential', axes[0]),
-        (gpu_only, 'GPU-Only', axes[1]),
-        (hybrid, 'Hybrid', axes[2])
-    ]
+    # Plot for different modes
+    for df, label, marker in [(gpu_only, 'GPU-only', 'o'), 
+                               (hybrid, 'Hybrid', 's'),
+                               (sequential, 'Sequential', '^')]:
+        ax.scatter(df['output_tokens'], df['latency_s'], 
+                   alpha=0.6, s=100, label=label, marker=marker)
     
-    for data, title, ax in datasets:
-        scatter = ax.scatter(data['output_tokens'], data['latency_s'],
-                            c=data['prompt_length'], cmap='viridis',
-                            alpha=0.6, s=50)
-        ax.set_xlabel('Output Tokens')
-        ax.set_ylabel('Latency (seconds)')
-        ax.set_title(title)
-        plt.colorbar(scatter, ax=ax, label='Prompt Length')
-        ax.grid(True, alpha=0.3)
+    # Add correlation line for all data
+    all_data = pd.concat([gpu_only, hybrid, sequential])
+    z = np.polyfit(all_data['output_tokens'], all_data['latency_s'], 1)
+    p = np.poly1d(z)
+    x_line = np.linspace(all_data['output_tokens'].min(), 
+                        all_data['output_tokens'].max(), 100)
+    ax.plot(x_line, p(x_line), '--', color='gray', 
+            alpha=0.7, linewidth=2, label='Trend')
     
-    plt.suptitle('Output Tokens vs Latency (colored by Prompt Length)', fontsize=14)
+    ax.set_xlabel('Output Tokens Generated', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Latency (seconds)', fontsize=12, fontweight='bold')
+    ax.set_title('Generation Length vs Latency: Isolating Generation Cost', 
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    return fig
+    plt.savefig('plot13_output_tokens_vs_latency.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
-# ==============================================================================
-# GENERATE ALL PLOTS
-# ==============================================================================
+# ============================================================================
+# Generate all plots
+# ============================================================================
 if __name__ == "__main__":
-    print("Generating all plots...")
+    print("Generating Plot 1: Latency vs Prompt Size...")
+    plot_latency_vs_prompt_size()
     
-    plots = [
-        ("1_sequential_latency_vs_prompt.png", plot_sequential_latency_vs_prompt),
-        ("2_sequential_throughput_vs_prompt.png", plot_sequential_throughput_vs_prompt),
-        ("3_gpu_saturation_curve.png", plot_gpu_saturation_curve),
-        ("4_throughput_collapse.png", plot_throughput_collapse),
-        ("5_latency_distribution.png", plot_latency_distribution),
-        ("6_latency_ecdf.png", plot_latency_ecdf),
-        ("7_throughput_comparison.png", plot_throughput_comparison),
-        ("8_routing_breakdown.png", plot_routing_breakdown),
-        ("9_cpu_utilization.png", plot_cpu_utilization),
-        ("10_gpu_utilization.png", plot_gpu_utilization),
-        ("11_memory_utilization.png", plot_memory_utilization),
-        ("12_latency_heatmap.png", plot_latency_heatmap),
-        ("13_output_tokens_vs_latency.png", plot_output_tokens_vs_latency),
-    ]
+    print("Generating Plot 2: Throughput vs Prompt Size...")
+    plot_throughput_vs_prompt_size()
     
-    for filename, plot_func in plots:
-        try:
-            print(f"Creating {filename}...")
-            fig = plot_func()
-            fig.savefig(filename, dpi=300, bbox_inches='tight')
-            plt.close(fig)
-            print(f"✓ Saved {filename}")
-        except Exception as e:
-            print(f"✗ Error creating {filename}: {str(e)}")
+    print("Generating Plot 3: Latency Distribution...")
+    plot_latency_distribution()
+    
+    print("Generating Plot 4: ECDF with Percentiles...")
+    plot_ecdf_percentiles()
+    
+    print("Generating Plot 5: Throughput Comparison...")
+    plot_throughput_comparison()
+    
+    print("Generating Plot 6: Request Distribution...")
+    plot_request_distribution()
+    
+    print("Generating Plot 7: CPU Utilization...")
+    plot_cpu_utilization()
+    
+    print("Generating Plot 8: GPU Utilization...")
+    plot_gpu_utilization()
+    
+    print("Generating Plot 9: Memory Footprint...")
+    plot_memory_footprint()
+    
+    print("Generating Plot 10: Latency vs Queue Depth...")
+    plot_latency_vs_queue_depth()
+    
+    print("Generating Plot 11: Throughput vs Queue Depth...")
+    plot_throughput_vs_queue_depth()
+    
+    print("Generating Plot 12: Queue Depth × Prompt Size Heatmap...")
+    plot_heatmap_queue_prompt()
+    
+    print("Generating Plot 13: Output Tokens vs Latency...")
+    plot_output_tokens_vs_latency()
     
     print("\nAll plots generated successfully!")
+    print("Plots saved as PNG files with 300 DPI resolution.")
